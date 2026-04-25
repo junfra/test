@@ -1,0 +1,5 @@
+- Failed Artifact: `oracle-modernization-plan-v2.md`
+- Reset Subject: `Oracle-Plus Python CLI modernization plan`
+- Fail Anchor: `Terminal handoff still describes the artifact as a reset plan instead of a completed implementation plan`
+- Required Reset: `Replace the reset-plan-style closing note with a real implementation handoff that points to `superpowers:subagent-driven-development` and keeps the modernization contract, compatibility-surface policy, and source-bearing validation scope intact.`
+- Do Not Carry Forward: `Any terminal section that says "this reset plan is complete," any backward-looking handoff to drafting/resetting, and any suggestion that the artifact itself is still part of the reset step.`
