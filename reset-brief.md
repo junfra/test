@@ -1,0 +1,5 @@
+- Failed Artifact: `oracle-modernization-plan.md`
+- Reset Subject: `Oracle-Plus Python CLI modernization plan`
+- Fail Anchor: `Unsupported mandatory deletion of the legacy shell wrapper (`output/oracle-plus.sh`)`
+- Required Reset: `Keep the Python CLI modernization and docs migration, but treat the legacy shell wrapper as an optional compatibility surface rather than a required deletion; narrow legacy-reference validation to source-bearing paths and include the repo-local skill-doc copy in the docs migration scope.`
+- Do Not Carry Forward: `Any mandatory deletion of `output/oracle-plus.sh`, any repo-wide zero-match search across backup/run history artifacts, and any plan structure that depends on retiring the legacy wrapper as the end state.`

@@ -1,0 +1,8 @@
+- Trigger: `supervision_fail`
+- Stop: current artifact closed after fail
+- Required Next Artifact: `fresh artifact`
+- Reset Brief Required: `yes`
+- Revision Number: `v3`
+- Next Draft Owner: `oracle`
+- Step 1: call `writing-reset-plans` for the fresh artifact and inherit `Revision Number` and `Next Draft Owner` unchanged
+- Step 2: use `oracle-browser` in a fresh session to draft the fresh artifact from the completed `writing-reset-plans` output
