@@ -1,0 +1,34 @@
+goal: "Completely modernize the bash-based `oracle-plus.sh` wrapper and `oracle-browser` skill into a Python `uv`-based CLI application, while maintaining internal invocation of the Node.js `@steipete/oracle` package."
+constraints:
+  - Python >= 3.12 (managed via `uv`)
+  - Keep exactly the same port locking semantics (`flock` on `~/.cache/oracle-plus/ports/*.lock`)
+  - Keep exactly the same run state tracking (`~/.cache/oracle-plus/runs/<slug>.meta`)
+  - Wrap Node.js `@steipete/oracle` using Python's subprocess (do not rewrite Playwright native automation)
+acceptance_criteria:
+  - Port probing and local port locking (9473-9479) works reliably.
+  - Run state (.meta) is correctly written with pid, status, fallback reasons, and selected port.
+  - Busy fallback logic automatically retries the next port.
+  - Host IP auto-detection successfully resolves Docker/WSL endpoints.
+  - Codex Project URL is injected when port is 9473.
+  - Bypass logic properly skips locking for control commands (`status`, `session`, `--render`).
+  - The `oracle-browser` SKILL.md is fully updated to point to the new Python CLI instead of `oracle-plus.sh`.
+ontology_schema:
+  name: OraclePlusModernized
+  description: "Modernized Oracle-Plus CLI state and components"
+  fields:
+    - name: RunState
+      type: object
+      description: "State tracking for each oracle run"
+    - name: PortLock
+      type: object
+      description: "File-based locking for concurrent port management"
+evaluation_principles:
+  - Robustness (Subprocess management and file-locking must handle edge cases gracefully)
+  - Maintainability (Clean Python code replacing legacy bash scripts)
+exit_conditions:
+  - The CLI runs without errors and all 8 legacy bash functional elements are supported.
+  - The SKILL.md is successfully synchronized.
+metadata:
+  version: "1.0.0"
+  ambiguity_score: 0.05
+  interview_id: "oracle-browser-modernization"
