@@ -12,6 +12,7 @@ from typing import Any, Callable, Optional
 from .intake import load_source_data
 from .models import SourceReference
 from .storage import save_progress
+from .models import ProgressState
 
 
 def _extract_keywords(content: str) -> list[str]:

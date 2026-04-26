@@ -235,7 +235,7 @@ def record_session(
         raise ApprovalRequiredError("Draft must be approved before recall")
 
     # 2. Determine outcome based on average score
-    avg_score = sum(scores) / len(scores)
+    avg_score = sum(scores) / max(len(scores), 1) if scores else 0.0
     if avg_score >= 0.7:
         outcome = "pass"
     elif avg_score < 0.4:
