@@ -172,3 +172,40 @@ def cmd_intake(workspace_root: str | None, subject_id: str, text: str):  # noqa:
 
     _add(subject_dir, [SourceReference(kind="pasted_text", content=text)])
     click.echo(f"Intake complete for '{subject_id}'.")
+
+
+# ---- draft --------------------------------------------------------------- #
+
+@main.command("draft")
+@click.option("-C", "--cwd", "workspace_root", type=click.Path(), default=None, help="Working directory (defaults to current working directory).")
+@click.argument("subject_id", type=str)
+def cmd_draft(workspace_root: str | None, subject_id: str):  # noqa: D401 — CLI docs
+    """Generate a learning draft for the subject.
+
+    \b
+        study draft <subject_id>
+    """
+    from pathlib import Path as P
+
+    ws = P.cwd() if workspace_root is None else P(workspace_root)
+    subject_dir = ws / "subjects" / subject_id
+
+    if not (subject_dir / "progress_state.json").exists():
+        click.echo(f"Error: subject '{subject_id}' not found at {subject_dir}.", err=True)
+        raise SystemExit(1)
+
+    from .storage import load_progress
+    state = load_progress(subject_dir)
+
+    from .drafting import generate_draft as _gd
+
+    draft_text = _gd(subject_dir, state.topic)
+
+    # Count chapters for output.
+    import re
+    chapters = re.findall(r"^# (.+)$", draft_text, flags=re.MULTILINE)
+
+    click.echo(f"Draft generated: {state.topic}")
+    click.echo(f"Chapters: {len(chapters)}")
+    if state.draft_version_hash is not None and len(state.draft_version_hash) > 16:
+        click.echo(f"Version hash: {state.draft_version_hash[:16]}...")
