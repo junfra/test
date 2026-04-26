@@ -159,6 +159,14 @@ def generate_draft(subject_root: Path, topic: str) -> str:
     state.draft_version_hash = hashlib.sha256(draft_text.encode()).hexdigest()
     save_progress(subject_root, state)
 
+    # Side-effect: log draft generation event
+    chapter_count = len([l for l in draft_text.splitlines() if re.match(r'^# (?!#)', l)])
+    from .logging import log_session_event
+    log_session_event(subject_root, "draft_generated", {
+        "version_hash": state.draft_version_hash,
+        "chapter_count": chapter_count,
+    })
+
     return draft_text
 
 

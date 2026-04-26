@@ -46,6 +46,15 @@ def add_sources(subject_root: Path, sources: list[SourceReference | dict[str, An
     # Update manifest count via load+save round-trip.
     state = ProgressState.model_validate(json.loads((subject_root / "progress_state.json").read_text()))
     state.source_manifest_count += len(validated)
+    # Side-effect: log each source addition
+    import hashlib as _hashlib
+    from .logging import log_session_event
+    for i, src in enumerate(validated):
+        content_hash = _hashlib.sha256(src.content.encode()).hexdigest()[:16]
+        log_session_event(
+            subject_root, "source_added",
+            {"kind": src.kind, "content_hash": content_hash},
+        )
     _save_progress(subject_root, state)
 
 

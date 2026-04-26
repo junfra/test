@@ -54,7 +54,9 @@ def _flush_section(
     content: str,
 ) -> None:
     """Append a section if we have a valid chapter + title."""
-    if chapter and title and content.strip():
+    # For fallback extraction (where content may be blank between chapters), 
+    # allow entry even with empty content as long as chapter/title are set
+    if chapter and title:
         sections.append((chapter, title, content))
 
 
@@ -293,6 +295,14 @@ def record_session(
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
     append_recalls(subject_root, [entry])
+
+    # Side-effect: log recall session to session_logs (F8 drift fix)
+    from .logging import log_session_event
+    question_ids = [q.id for q in questions]
+    log_session_event(
+        subject_root, "recall_session_logged",
+        {"question_ids": question_ids, "scores": scores, "outcome": outcome},
+    )
 
     # 4. Update ProgressState — THIS IS CRITICAL: all fields must be populated correctly
     state = load_progress(subject_root)
