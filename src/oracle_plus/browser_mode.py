@@ -220,8 +220,19 @@ def _build_forwarded_args(
     return forwarded
 
 
-def _run_command(command: list[str], args: list[str], *, output_file: Path | None = None) -> int:
-    return run_subprocess(command, args, output_file=output_file)
+def _run_command(
+    command: list[str],
+    args: list[str],
+    *,
+    output_file: Path | None = None,
+    inactivity_timeout_seconds: int | None = None,
+) -> int:
+    return run_subprocess(
+        command,
+        args,
+        output_file=output_file,
+        inactivity_timeout_seconds=inactivity_timeout_seconds,
+    )
 
 
 def get_codex_url() -> str | None:
@@ -397,7 +408,12 @@ def run_browser_mode(
         initialize_run_state(session_slug, host_ip, ",".join(map(str, _candidate_ports(port))), base_dir=config.cache_root)
         record_run_state(session_slug, "capture_path", str(output_file), base_dir=config.cache_root)
 
-    return run_subprocess(command, args, output_file=capture_output_file or output_file)
+    return run_subprocess(
+        command,
+        args,
+        output_file=capture_output_file or output_file,
+        inactivity_timeout_seconds=config.BROWSER_INACTIVITY_TIMEOUT_SECONDS,
+    )
 
 
 def run_browser_with_busy_fallback(
@@ -545,4 +561,8 @@ def run_browser_cli(argv: list[str]) -> int:
         remote_token=remote_token if not _has_flag(argv, "--remote-token") and not _has_prefixed_flag(argv, "--remote-token") else None,
         codex_project_url=codex_url,
     )
-    return _run_command(command, forwarded_args)
+    return _run_command(
+        command,
+        forwarded_args,
+        inactivity_timeout_seconds=config.BROWSER_INACTIVITY_TIMEOUT_SECONDS,
+    )

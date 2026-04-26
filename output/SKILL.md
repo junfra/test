@@ -48,6 +48,7 @@ EOF
 * For generated prompt files, write the file completely before invoking `oracle-plus`.
 * Quote the `--prompt-file` path if it may contain spaces.
 * `--prompt-file` is convenience sugar over `-p`; very large prompt files may still hit OS argument length limits because the wrapper forwards prompt text as CLI arguments.
+* Browser runs can stay silent for up to 30 minutes before the wrapper times out for inactivity.
 
 ## Contract
 

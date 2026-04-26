@@ -58,16 +58,18 @@ def test_build_oracle_args_preserves_passthrough():
 
 
 def test_run_browser_mode_uses_runner(monkeypatch, tmp_path):
+    from oracle_plus import config
     from oracle_plus.browser_mode import run_browser_mode
 
     monkeypatch.setattr("oracle_plus.browser_mode.detect_host_ip", lambda: "127.0.0.1")
     monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
     captured = {}
 
-    def runner(command, args, *, output_file=None):
+    def runner(command, args, *, output_file=None, inactivity_timeout_seconds=None):
         captured["command"] = command
         captured["args"] = list(args)
         captured["output_file"] = output_file
+        captured["inactivity_timeout_seconds"] = inactivity_timeout_seconds
         return 0
 
     monkeypatch.setattr("oracle_plus.browser_mode.run_subprocess", runner)
@@ -84,6 +86,7 @@ def test_run_browser_mode_uses_runner(monkeypatch, tmp_path):
     assert rc == 0
     assert captured["command"] == ["/usr/bin/oracle"]
     assert "--write-output" in captured["args"]
+    assert captured["inactivity_timeout_seconds"] == config.BROWSER_INACTIVITY_TIMEOUT_SECONDS
 
 
 def test_busy_fallback_scans_next_port(monkeypatch):
@@ -171,10 +174,11 @@ def test_run_browser_cli_rewrites_prompt_file_to_prompt(monkeypatch, tmp_path):
 
     monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
 
-    def fake_run_subprocess(command, args, *, output_file=None):
+    def fake_run_subprocess(command, args, *, output_file=None, inactivity_timeout_seconds=None):
         captured["command"] = command
         captured["args"] = list(args)
         captured["output_file"] = output_file
+        captured["inactivity_timeout_seconds"] = inactivity_timeout_seconds
         return 0
 
     monkeypatch.setattr("oracle_plus.browser_mode.run_subprocess", fake_run_subprocess)
@@ -184,6 +188,7 @@ def test_run_browser_cli_rewrites_prompt_file_to_prompt(monkeypatch, tmp_path):
     assert rc == 0
     assert captured["command"] == ["/usr/bin/oracle"]
     assert captured["args"] == ["--engine", "api", "-p", "Review this change.\n", "--model", "gpt-5.2"]
+    assert captured["inactivity_timeout_seconds"] is None
 
 
 def test_run_browser_cli_rejects_prompt_file_with_prompt(monkeypatch, tmp_path):
@@ -208,9 +213,10 @@ def test_run_browser_cli_rewrites_prompt_file_equals_syntax(monkeypatch, tmp_pat
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
 
-    def fake_run_subprocess(command, args, *, output_file=None):
+    def fake_run_subprocess(command, args, *, output_file=None, inactivity_timeout_seconds=None):
         captured["command"] = command
         captured["args"] = list(args)
+        captured["inactivity_timeout_seconds"] = inactivity_timeout_seconds
         return 0
 
     monkeypatch.setattr("oracle_plus.browser_mode.run_subprocess", fake_run_subprocess)
@@ -220,6 +226,7 @@ def test_run_browser_cli_rewrites_prompt_file_equals_syntax(monkeypatch, tmp_pat
     assert rc == 0
     assert captured["command"] == ["/usr/bin/oracle"]
     assert captured["args"] == ["-p", "Review equals syntax.\n", "--model", "gpt-5.2"]
+    assert captured["inactivity_timeout_seconds"] is None
 
 
 def test_run_browser_cli_rejects_missing_prompt_file_path():
@@ -285,9 +292,10 @@ def test_run_browser_cli_control_command_bypasses_prompt_file_normalization(monk
 
     monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
 
-    def fake_run_subprocess(command, args, *, output_file=None):
+    def fake_run_subprocess(command, args, *, output_file=None, inactivity_timeout_seconds=None):
         captured["command"] = command
         captured["args"] = list(args)
+        captured["inactivity_timeout_seconds"] = inactivity_timeout_seconds
         return 0
 
     monkeypatch.setattr("oracle_plus.browser_mode.run_subprocess", fake_run_subprocess)
@@ -297,6 +305,7 @@ def test_run_browser_cli_control_command_bypasses_prompt_file_normalization(monk
     assert rc == 0
     assert captured["command"] == ["/usr/bin/oracle"]
     assert captured["args"] == ["status", "session-1", "--prompt-file", "/tmp/does-not-exist-prompt.md"]
+    assert captured["inactivity_timeout_seconds"] is None
 
 
 def test_run_browser_cli_browser_autoselect_normalizes_prompt_file(monkeypatch, tmp_path):
@@ -320,3 +329,27 @@ def test_run_browser_cli_browser_autoselect_normalizes_prompt_file(monkeypatch, 
 
     assert rc == 0
     assert captured["kwargs"]["passthrough"] == ("-p", "Review browser path.\n", "--model", "gpt-5.2")
+
+
+def test_run_browser_cli_fixed_host_path_uses_inactivity_timeout(monkeypatch):
+    from oracle_plus import config
+    from oracle_plus.browser_mode import run_browser_cli
+
+    captured = {}
+
+    monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
+
+    def fake_run_subprocess(command, args, *, output_file=None, inactivity_timeout_seconds=None):
+        captured["command"] = command
+        captured["args"] = list(args)
+        captured["output_file"] = output_file
+        captured["inactivity_timeout_seconds"] = inactivity_timeout_seconds
+        return 0
+
+    monkeypatch.setattr("oracle_plus.browser_mode.run_subprocess", fake_run_subprocess)
+
+    rc = run_browser_cli(["--engine", "browser", "--remote-host", "127.0.0.1:9473", "-p", "Prompt"])
+
+    assert rc == 0
+    assert captured["command"] == ["/usr/bin/oracle"]
+    assert captured["inactivity_timeout_seconds"] == config.BROWSER_INACTIVITY_TIMEOUT_SECONDS

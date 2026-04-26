@@ -17,6 +17,7 @@ CODEX_PROJECT_CHATGPT_URL = (
 )
 PACKAGE_SPEC = os.environ.get("ORACLE_NPM_SPEC", "@steipete/oracle@0.9.0")
 PROBE_TIMEOUT_SECONDS = int(os.environ.get("ORACLE_REMOTE_PROBE_TIMEOUT_SECONDS", "1"))
+BROWSER_INACTIVITY_TIMEOUT_SECONDS = int(os.environ.get("ORACLE_BROWSER_INACTIVITY_TIMEOUT_SECONDS", "1800"))
 
 _cache_root_env = os.environ.get("ORACLE_PLUS_CACHE_DIR") or os.environ.get("ORACLE_PLUS_CACHE")
 cache_root: Path = Path(_cache_root_env) if _cache_root_env else Path.home() / ".cache" / "oracle-plus"

@@ -48,3 +48,9 @@ def test_skill_docs_describe_prompt_file_limits_and_encoding():
         text = relpath.read_text(encoding="utf-8")
         assert "UTF-8" in text
         assert "argument length" in text
+
+
+def test_skill_docs_describe_browser_inactivity_wait_limit():
+    for relpath in [Path("live-SKILL.md"), Path("skills/oracle-browser/SKILL.md"), Path("output/SKILL.md")]:
+        text = relpath.read_text(encoding="utf-8")
+        assert "30 minutes" in text
