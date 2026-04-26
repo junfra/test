@@ -202,3 +202,83 @@ def detect_prohibited_patterns(text: str, rule=None) -> ProhibitedPatternResult:
         matches=matches,
         errors=errors,
     )
+
+
+# ─── Judgment Density Analysis ─────────────────────────────
+
+@dataclass(frozen=True)
+class JudgmentDensityResult:
+    """Result of analyzing judgment function density in a learning draft."""
+    passed: bool
+    paragraph_count: int
+    weak_paragraph_indexes: list[int]  # paragraphs without judgment functions
+    errors: list[str]
+
+
+JUDGMENT_FUNCTION_PATTERNS: dict[str, re.Pattern] = {
+    "necessity_judgment": re.compile(r"(필요|이유|문제|부재|붕괴|왜냐하면)"),
+    "boundary_judgment": re.compile(r"(정의|경계|포함|제외|구분|다르다|아니다)"),
+    "mechanism_judgment": re.compile(r"(작동|동작|원리|흐름|상태|인과|조건|결과)"),
+    "correctness_judgment": re.compile(r"(판단|기준|올바른|잘못된|정확|오해)"),
+    "failure_diagnosis": re.compile(r"(실패|오류|무너|잘못|원인|증상)"),
+    "verification_judgment": re.compile(r"(검증|확인|테스트|판별|증명|반례)"),
+    "similarity_boundary_judgment": re.compile(r"(유사|비교|차이|다름)"),
+}
+
+
+def _extract_paragraphs(text: str) -> list[str]:
+    """Extract paragraphs by splitting text on blank lines (double newline)."""
+    paragraphs = []
+    current: list[str] = []
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            if current:
+                paragraphs.append("\n".join(current))
+                current = []
+        else:
+            current.append(stripped)
+
+    if current:
+        paragraphs.append("\n".join(current))
+
+    return paragraphs
+
+
+def analyze_judgment_density(text: str, rule: LearningDraftRule | None = None) -> JudgmentDensityResult:
+    """Analyze the density of judgment functions in a learning draft.
+
+    Returns a result indicating whether each substantive paragraph contains at
+    least one Korean-language pattern expressing necessity, boundary, mechanism,
+    correctness, failure diagnosis, verification, or similarity-boundary reasoning.
+
+    A valid pass requires BOTH no weak paragraphs AND >= 8 paragraphs total.
+    """
+    paragraphs = _extract_paragraphs(text)
+    weak_indexes: list[int] = []
+
+    for i, paragraph in enumerate(paragraphs):
+        if len(paragraph) < 30:
+            # Paragraphs below the length threshold are automatically "weak"
+            weak_indexes.append(i)
+            continue
+
+        matched = [name for name, pattern in JUDGMENT_FUNCTION_PATTERNS.items()
+                   if pattern.search(paragraph)]
+        if not matched:
+            weak_indexes.append(i)
+
+    errors: list[str] = []
+    if weak_indexes:
+        # THIS FORMAT IS THE FIX FROM V2 — must match test expectations exactly
+        errors.append(
+            f"judgment density failed: {len(weak_indexes)} of {len(paragraphs)} paragraphs lack judgment functions"
+        )
+
+    return JudgmentDensityResult(
+        passed=not weak_indexes and len(paragraphs) >= 8,
+        paragraph_count=len(paragraphs),
+        weak_paragraph_indexes=weak_indexes,
+        errors=errors,
+    )
