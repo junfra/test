@@ -74,6 +74,61 @@ def _strip_flag_with_value(needle: str, args: Iterable[str]) -> list[str]:
     return result
 
 
+def _read_prompt_file(path_value: str) -> str:
+    path = Path(path_value).expanduser()
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise BrowserModeError(2, f"--prompt-file path does not exist: {path_value}") from exc
+    except OSError as exc:
+        raise BrowserModeError(2, f"unable to read --prompt-file {path_value}: {exc}") from exc
+
+
+def _normalize_prompt_file_args(args: Iterable[str]) -> list[str]:
+    items = list(args)
+    prompt_file_value: str | None = None
+    prompt_file_count = 0
+    prompt_present = False
+
+    for index, arg in enumerate(items):
+        if arg in {"-p", "--prompt"} or arg.startswith("--prompt="):
+            prompt_present = True
+            continue
+        if arg == "--prompt-file":
+            prompt_file_count += 1
+            if index + 1 >= len(items):
+                raise BrowserModeError(2, "--prompt-file requires a file path")
+            prompt_file_value = items[index + 1]
+            continue
+        if arg.startswith("--prompt-file="):
+            prompt_file_count += 1
+            prompt_file_value = arg.split("=", 1)[1]
+
+    if prompt_file_count == 0:
+        return items
+    if prompt_file_count > 1:
+        raise BrowserModeError(2, "--prompt-file can only be specified once")
+    if prompt_present:
+        raise BrowserModeError(2, "--prompt-file and -p/--prompt cannot be used together")
+
+    prompt_text = _read_prompt_file(prompt_file_value or "")
+    normalized: list[str] = []
+    index = 0
+    while index < len(items):
+        arg = items[index]
+        if arg == "--prompt-file":
+            normalized.extend(["-p", prompt_text])
+            index += 2
+            continue
+        if arg.startswith("--prompt-file="):
+            normalized.extend(["-p", prompt_text])
+            index += 1
+            continue
+        normalized.append(arg)
+        index += 1
+    return normalized
+
+
 def is_control_command(args: Iterable[str]) -> bool:
     items = list(args)
     first = items[0] if items else ""
@@ -451,6 +506,7 @@ def run_browser_with_busy_fallback(
 def run_browser_cli(argv: list[str]) -> int:
     """Run the full browser/direct CLI flow from raw argv."""
     command = resolve_oracle_command()
+    argv = _normalize_prompt_file_args(argv)
     if is_control_command(argv) or not uses_browser_engine(argv):
         return _run_command(command, argv)
 

@@ -160,3 +160,39 @@ def test_busy_fallback_uses_busy_output_patterns(monkeypatch, tmp_path, busy_tex
         == 0
     )
     assert attempts[:2] == [9473, 9474]
+
+
+def test_run_browser_cli_rewrites_prompt_file_to_prompt(monkeypatch, tmp_path):
+    from oracle_plus.browser_mode import run_browser_cli
+
+    prompt_file = tmp_path / "prompt.md"
+    prompt_file.write_text("Review this change.\n", encoding="utf-8")
+    captured = {}
+
+    monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
+
+    def fake_run_subprocess(command, args, *, output_file=None):
+        captured["command"] = command
+        captured["args"] = list(args)
+        captured["output_file"] = output_file
+        return 0
+
+    monkeypatch.setattr("oracle_plus.browser_mode.run_subprocess", fake_run_subprocess)
+
+    rc = run_browser_cli(["--engine", "api", "--prompt-file", str(prompt_file), "--model", "gpt-5.2"])
+
+    assert rc == 0
+    assert captured["command"] == ["/usr/bin/oracle"]
+    assert captured["args"] == ["--engine", "api", "-p", "Review this change.\n", "--model", "gpt-5.2"]
+
+
+def test_run_browser_cli_rejects_prompt_file_with_prompt(monkeypatch, tmp_path):
+    from oracle_plus.browser_mode import BrowserModeError, run_browser_cli
+
+    prompt_file = tmp_path / "prompt.md"
+    prompt_file.write_text("Review this change.\n", encoding="utf-8")
+
+    monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
+
+    with pytest.raises(BrowserModeError, match="cannot be used together"):
+        run_browser_cli(["--engine", "api", "-p", "inline prompt", "--prompt-file", str(prompt_file)])

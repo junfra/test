@@ -33,3 +33,11 @@ def test_skill_docs_use_oracle_cli_path():
     text = Path("skills/oracle-browser/SKILL.md").read_text(encoding="utf-8")
     assert "ORACLE_CLI" in text
     assert "oracle-plus" in text
+
+
+def test_skill_docs_use_prompt_file_examples():
+    for relpath in [Path("live-SKILL.md"), Path("skills/oracle-browser/SKILL.md"), Path("output/SKILL.md")]:
+        text = relpath.read_text(encoding="utf-8")
+        assert "--prompt-file" in text
+        assert "--file /tmp/oracle_prompt.md" not in text
+        assert "`--prompt-file`" in text
