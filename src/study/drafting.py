@@ -10,7 +10,7 @@ from .config import load_lm_config
 from .intake import load_source_data
 from .lm_client import LMClient, LMGenerationError, parse_learning_system_json
 from .models import LearningDraftRule, LearningDraftSystem, RecallQuestion, SourceReference
-from .learning_draft_rule import validate_learning_draft_rule, DraftValidationError
+from .learning_draft_rule import validate_learning_draft_rule, DraftValidationError, _normalize_section_title
 from .prompt_builder import build_chapter_prompt
 from .storage import load_progress, save_progress
 
@@ -145,81 +145,55 @@ def _build_fallback_learning_system(
 def _render_draft(system: LearningDraftSystem) -> str:
     """Render a LearningDraftSystem into the 8-section markdown format.
 
-    Produces exactly these sections in order, with no extras:
+    Primary source of section body content is the LM-generated ``section_structure``,
+    parsed by normalized section title. Seed data (concept_layers, etc.) provides only
+    structural scaffolding — it does NOT contribute body text when LM content exists.
+
+    Produces exactly these sections in order:
       문제 배경, 개념 정의, 동작 원리, 핵심 판단 기준,
       실패 사례, 검증 방법, 유사 개념 비교, 복습 질문
     """
     required_sections = LearningDraftRule.DEFAULT_REQUIRED_SECTIONS.copy()
     topic = system.topic
 
-    parts: list[str] = [f"# {topic}\u2014\uc2e4험 \ucdf8안"]
+    parts: list[str] = [f"# {topic}\u2014\uc2e4\ud5d8 \ucdf8\uc548"]
 
-    # Primary source: LM-generated section_structure content
-    lm_content = system.section_structure if system.section_structure else []
+    # ── Step 1: Parse LM section_structure into a dict keyed by section title ──
+    lm_sections: dict[str, str] = {}
+    for chunk in (system.section_structure or []):
+        for m in re.finditer(r"^##\s+(.+?)$[ \t]*$", chunk, re.MULTILINE):
+            raw_title = m.group(1).strip()
+            # Extract body: from end of header to next ## at start of line or end of text
+            body_start = m.end()
+            body_end_m = re.search(r"^##\s+.+?$", chunk[body_start:], re.MULTILINE)
+            if body_end_m:
+                body = chunk[body_start : body_start + body_end_m.start()].strip()
+            else:
+                body = chunk[body_start:].strip()
+            lm_sections[_normalize_section_title(raw_title)] = body
 
-
-    seeds = (system.concept_layers + system.verification_points +
-             system.recall_hooks + system.bibliography)
-
-    structural_markers = [
-        "왜냐하면 이 제약이 위반되면 메커니즘 붕괴로 이어지기 때문이다.",
-        "따라서 유사 개념과의 경계를 반드시 구분해야 한다.",
-        "이러한 판단은 검증 없이서는 성립하지 않는다.",
-        "실패 원인을 진단하는 것이 핵심 판단 기준이다.",
-    ]
-
-    if not seeds:
-        seeds = [f"{topic}\uc758 \uae30\ubcf8 \uc6d0\ub9ac"] * 4
-
-    judgment_kws = ["~", "~라고 볼 때", "~라고 판단된다", "~라고 생각한다"]
-
-    for section_idx, section_name in enumerate(required_sections):
+    for section_name in required_sections:
         parts.append(f"## {section_name}")
         parts.append("")
 
-        # Generate 12 unique paragraphs per section using varied seed rotation
-
-        # Try to find LM-provided content matching this section name
-        found_content = [item for item in lm_content if section_name.lower() in item.lower()]
-
-        if not found_content:
-            seen_texts: set[str] = set()
-        seen_texts: set[str] = set()
-
-        def gen_paragraph(pidx: int) -> str:
-            idx_a = (pidx * 3 + section_idx) % len(seeds)
-            seed_a = seeds[idx_a]
-            opening = (f"[{section_name}] {topic}\uc758 \uc6d0\ub9ac") if pidx == 0 else seed_a
-            para = f"{opening}. {topic}\uc740 \ubcc0\ucc98\uc5d0 \ub300\ud558\uace0 "
-            para += f"\uae34\uc21c\ud568\uc744 \uc7ac\uce58\uba70 {judgment_kws[pidx % 4]}."
-            para += f" {topic}\uc758 \ubcf4\ucc29\uc740 \ub3c5\ub96d\uacfc \uae30\uc220\uc744 "
-            para += f"\uc11e\ub729 \uc5f0\uacb0\ub418\uba70 {judgment_kws[(pidx + 1) % 4]}."
-            return para
-
-        for pidx in range(12):
-            para = gen_paragraph(pidx)
-            if para not in seen_texts:
-                parts.append(para)
-                seen_texts.add(para)
-
-        # Add 3 supplementary paragraphs
-        for extra_idx in range(3):
-            seed_s = seeds[(extra_idx + section_idx * 5) % len(seeds)]
-            para = f"{topic}\uc758 {section_name} \ube44\ud3ed. "
-            para += f"{seed_s}. ~라고 생각한다."
-            if para not in seen_texts:
-                parts.append(para)
-                seen_texts.add(para)
+        # ── Step 2: Render from LM content if available ──
+        lm_content = lm_sections.get(section_name)
+        if lm_content:
+            parts.append(lm_content.strip())
+        else:
+            # ── Step 3: Visible placeholder when LM omits section ──
+            parts.append(
+                f"[VALIDATION REQUIRED: LM did not provide required section \'{section_name}\'.]"
+            )
 
         parts.append("")
 
-    # References section
+    # References section (unchanged from before)
     for index, entry in enumerate(system.bibliography, start=1):
         parts.append(f"{index}. {entry.strip()}")
     parts.append("")
 
     return "\n".join(parts).strip() + "\n"
-
 
 
 def _validate_draft_text(draft_text: str, *, learning_draft_rule=None) -> None:

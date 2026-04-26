@@ -246,7 +246,6 @@ class TestValidateDraftTextRaisesOnFailure:
     """Task 1: _validate_draft_text() raises DraftValidationError on failed validation."""
 
     def test_failed_validation_raises_DraftValidationError(self):
-        """Mock validator to return passed=False; assert _validate_draft_text() raises."""
         from unittest.mock import patch
         from study.drafting import _validate_draft_text
         from study.learning_draft_rule import DraftValidationError
@@ -263,7 +262,6 @@ class TestValidateDraftTextRaisesOnFailure:
         assert "body too short" in str(exc_info.value)
 
     def test_passed_validation_continues_normally(self):
-        """Mock validator to return passed=True; assert no exception."""
         from unittest.mock import patch
         from study.drafting import _validate_draft_text
         from study.learning_draft_rule import DraftValidationError
@@ -273,11 +271,9 @@ class TestValidateDraftTextRaisesOnFailure:
                 "passed": True,
                 "errors": [],
             }
-            # Should NOT raise
             _validate_draft_text("dummy draft text")
 
     def test_error_message_includes_failure_details(self):
-        """Ensure the exception message contains the full error list."""
         from unittest.mock import patch
         from study.drafting import _validate_draft_text
         from study.learning_draft_rule import DraftValidationError
@@ -291,4 +287,90 @@ class TestValidateDraftTextRaisesOnFailure:
                 _validate_draft_text("dummy draft text")
 
         msg = str(exc_info.value)
-        assert "3 error" in msg  # plural count from len(result["errors"])
+        assert "3 error" in msg
+
+
+class TestRenderFromLMStructure:
+    """Task 2: _render_draft() uses LM section_structure as primary content."""
+
+    def _make_section_chunk(self, title, body):
+        return f"## {title}\n{body}"
+
+    def test_rendered_output_contains_lm_content(self):
+        from study.drafting import _render_draft, LearningDraftSystem
+        
+        system = LearningDraftSystem(
+            topic="Test",
+            concept_layers=["cl"],
+            section_structure=[
+                self._make_section_chunk("문제 배경", "This is actual LM-generated content for problem background."),
+                self._make_section_chunk("개념 정의", "Definition from the language model."),
+            ],
+            recall_hooks=["rh"], verification_points=["vp"], bibliography=["bib"],
+        )
+        
+        rendered = _render_draft(system)
+        assert "actual LM-generated content" in rendered
+        assert "Definition from the language model" in rendered
+
+    def test_old_fallback_absent_when_lm_content_present(self):
+        from study.drafting import _render_draft, LearningDraftSystem
+        
+        system = LearningDraftSystem(
+            topic="Test",
+            concept_layers=["cl"],
+            section_structure=[
+                self._make_section_chunk("문제 배경", "Real LM content here."),
+            ],
+            recall_hooks=["rh"], verification_points=["vp"], bibliography=["bib"],
+        )
+        
+        rendered = _render_draft(system)
+        assert "Deterministic fallback" not in rendered
+        assert "fallback exists only because" not in rendered
+
+    def test_headings_preserved_in_seed_order(self):
+        import re
+        from study.drafting import _render_draft, LearningDraftSystem
+        
+        system = LearningDraftSystem(
+            topic="Test", concept_layers=["cl"],
+            section_structure=[
+                self._make_section_chunk("문제 배경", "Content."),
+                self._make_section_chunk("개념 정의", "Def."),
+                self._make_section_chunk("동작 원리", "Mechanism."),
+                self._make_section_chunk("핵심 판단 기준", "Criteria."),
+                self._make_section_chunk("실패 사례", "Failures."),
+                self._make_section_chunk("검증 방법", "Verification."),
+                self._make_section_chunk("유사 개념 비교", "Comparison."),
+                self._make_section_chunk("복습 질문", "Review."),
+            ],
+            recall_hooks=["rh"], verification_points=["vp"], bibliography=["bib"],
+        )
+        
+        rendered = _render_draft(system)
+        found = re.findall(r"^##\s+(.+?)$", rendered, flags=re.MULTILINE)
+        expected_order = [
+            "문제 배경", "개념 정의", "동작 원리", "핵심 판단 기준",
+            "실패 사례", "검증 방법", "유사 개념 비교", "복습 질문",
+        ]
+        assert found == expected_order, f"Expected {expected_order}, got {found}"
+
+    def test_placeholder_for_missing_section(self):
+        from study.drafting import _render_draft, LearningDraftSystem
+        
+        system = LearningDraftSystem(
+            topic="Test", concept_layers=["cl"],
+            section_structure=[
+                self._make_section_chunk("문제 배경", "Content."),
+                self._make_section_chunk("개념 정의", "Def."),
+                self._make_section_chunk("동작 원리", "Mechanism."),
+            ],
+            recall_hooks=["rh"], verification_points=["vp"], bibliography=["bib"],
+        )
+        
+        rendered = _render_draft(system)
+        assert "[VALIDATION REQUIRED: LM did not provide required section" in rendered
+        assert "'핵심 판단 기준'.]" in rendered
+        assert "'실패 사례'.]" in rendered
+
