@@ -41,3 +41,10 @@ def test_skill_docs_use_prompt_file_examples():
         assert "--prompt-file" in text
         assert "--file /tmp/oracle_prompt.md" not in text
         assert "`--prompt-file`" in text
+
+
+def test_skill_docs_describe_prompt_file_limits_and_encoding():
+    for relpath in [Path("live-SKILL.md"), Path("skills/oracle-browser/SKILL.md"), Path("output/SKILL.md")]:
+        text = relpath.read_text(encoding="utf-8")
+        assert "UTF-8" in text
+        assert "argument length" in text

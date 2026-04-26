@@ -80,6 +80,8 @@ def _read_prompt_file(path_value: str) -> str:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
         raise BrowserModeError(2, f"--prompt-file path does not exist: {path_value}") from exc
+    except UnicodeDecodeError as exc:
+        raise BrowserModeError(2, f"--prompt-file must be UTF-8 text: {path_value}") from exc
     except OSError as exc:
         raise BrowserModeError(2, f"unable to read --prompt-file {path_value}: {exc}") from exc
 
@@ -505,9 +507,13 @@ def run_browser_with_busy_fallback(
 
 def run_browser_cli(argv: list[str]) -> int:
     """Run the full browser/direct CLI flow from raw argv."""
-    command = resolve_oracle_command()
+    if is_control_command(argv):
+        command = resolve_oracle_command()
+        return _run_command(command, argv)
+
     argv = _normalize_prompt_file_args(argv)
-    if is_control_command(argv) or not uses_browser_engine(argv):
+    command = resolve_oracle_command()
+    if not uses_browser_engine(argv):
         return _run_command(command, argv)
 
     session_slug = _extract_flag_value("--slug", argv) or ""

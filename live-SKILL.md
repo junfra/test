@@ -42,11 +42,12 @@ EOF
 
 * Use either `-p "Prompt"` or `--prompt-file /path/to/prompt.md`, not both.
 * The `--prompt-file` path must point to an existing, readable local file.
-* Prefer UTF-8 plain text or Markdown prompt files.
+* Use UTF-8 plain text or Markdown prompt files. Non-UTF-8 files are rejected.
 * Keep upstream `--file` behavior for file attachments and context globs separate from `--prompt-file`.
 * Keep `--write-output` separate from `--prompt-file`: `--prompt-file` is prompt input, `--write-output` is final capture output.
 * For generated prompt files, write the file completely before invoking `oracle-plus`.
 * Quote the `--prompt-file` path if it may contain spaces.
+* `--prompt-file` is convenience sugar over `-p`; very large prompt files may still hit OS argument length limits because the wrapper forwards prompt text as CLI arguments.
 
 ## Contract
 

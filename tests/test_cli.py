@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import oracle_plus
+import pytest
 
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -59,3 +60,14 @@ def test_non_help_args_are_forwarded_to_browser_dispatch(monkeypatch):
     monkeypatch.setattr("oracle_plus.browser_mode.run_browser_cli", fake_run_browser_cli)
     assert oracle_plus.main(["status", "session-1"]) == 7
     assert seen["args"] == ["status", "session-1"]
+
+
+def test_prompt_file_decode_error_returns_cli_error(tmp_path, capsys):
+    prompt_file = tmp_path / "prompt.md"
+    prompt_file.write_bytes(b"\xff\xfe")
+
+    assert oracle_plus.main(["--engine", "api", "--prompt-file", str(prompt_file)]) == 2
+
+    captured = capsys.readouterr()
+    assert "UTF-8" in captured.err
+    assert "Traceback" not in captured.err

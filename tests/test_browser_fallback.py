@@ -196,3 +196,127 @@ def test_run_browser_cli_rejects_prompt_file_with_prompt(monkeypatch, tmp_path):
 
     with pytest.raises(BrowserModeError, match="cannot be used together"):
         run_browser_cli(["--engine", "api", "-p", "inline prompt", "--prompt-file", str(prompt_file)])
+
+
+def test_run_browser_cli_rewrites_prompt_file_equals_syntax(monkeypatch, tmp_path):
+    from oracle_plus.browser_mode import run_browser_cli
+
+    prompt_file = tmp_path / "prompt.md"
+    prompt_file.write_text("Review equals syntax.\n", encoding="utf-8")
+    captured = {}
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
+
+    def fake_run_subprocess(command, args, *, output_file=None):
+        captured["command"] = command
+        captured["args"] = list(args)
+        return 0
+
+    monkeypatch.setattr("oracle_plus.browser_mode.run_subprocess", fake_run_subprocess)
+
+    rc = run_browser_cli(["--prompt-file=" + str(prompt_file), "--model", "gpt-5.2"])
+
+    assert rc == 0
+    assert captured["command"] == ["/usr/bin/oracle"]
+    assert captured["args"] == ["-p", "Review equals syntax.\n", "--model", "gpt-5.2"]
+
+
+def test_run_browser_cli_rejects_missing_prompt_file_path():
+    from oracle_plus.browser_mode import BrowserModeError, run_browser_cli
+
+    with pytest.raises(BrowserModeError, match="requires a file path"):
+        run_browser_cli(["--engine", "api", "--prompt-file"])
+
+
+def test_run_browser_cli_rejects_duplicate_prompt_file(monkeypatch, tmp_path):
+    from oracle_plus.browser_mode import BrowserModeError, run_browser_cli
+
+    prompt_file = tmp_path / "prompt.md"
+    prompt_file.write_text("Review duplicates.\n", encoding="utf-8")
+
+    monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
+
+    with pytest.raises(BrowserModeError, match="can only be specified once"):
+        run_browser_cli(["--engine", "api", "--prompt-file", str(prompt_file), f"--prompt-file={prompt_file}"])
+
+
+def test_run_browser_cli_rejects_missing_prompt_file(monkeypatch):
+    from oracle_plus.browser_mode import BrowserModeError, run_browser_cli
+
+    monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
+
+    with pytest.raises(BrowserModeError, match="path does not exist"):
+        run_browser_cli(["--engine", "api", "--prompt-file", "/tmp/does-not-exist-prompt.md"])
+
+
+def test_run_browser_cli_rejects_unreadable_prompt_file(monkeypatch, tmp_path):
+    from oracle_plus.browser_mode import BrowserModeError, run_browser_cli
+
+    prompt_file = tmp_path / "prompt.md"
+    prompt_file.write_text("Review unreadable file.\n", encoding="utf-8")
+
+    def fake_read_text(self, *, encoding):
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr("pathlib.Path.read_text", fake_read_text)
+    monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
+
+    with pytest.raises(BrowserModeError, match="unable to read --prompt-file"):
+        run_browser_cli(["--engine", "api", "--prompt-file", str(prompt_file)])
+
+
+def test_run_browser_cli_rejects_non_utf8_prompt_file(monkeypatch, tmp_path):
+    from oracle_plus.browser_mode import BrowserModeError, run_browser_cli
+
+    prompt_file = tmp_path / "prompt.md"
+    prompt_file.write_bytes(b"\xff\xfe")
+
+    monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
+
+    with pytest.raises(BrowserModeError, match="UTF-8"):
+        run_browser_cli(["--engine", "api", "--prompt-file", str(prompt_file)])
+
+
+def test_run_browser_cli_control_command_bypasses_prompt_file_normalization(monkeypatch):
+    from oracle_plus.browser_mode import run_browser_cli
+
+    captured = {}
+
+    monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
+
+    def fake_run_subprocess(command, args, *, output_file=None):
+        captured["command"] = command
+        captured["args"] = list(args)
+        return 0
+
+    monkeypatch.setattr("oracle_plus.browser_mode.run_subprocess", fake_run_subprocess)
+
+    rc = run_browser_cli(["status", "session-1", "--prompt-file", "/tmp/does-not-exist-prompt.md"])
+
+    assert rc == 0
+    assert captured["command"] == ["/usr/bin/oracle"]
+    assert captured["args"] == ["status", "session-1", "--prompt-file", "/tmp/does-not-exist-prompt.md"]
+
+
+def test_run_browser_cli_browser_autoselect_normalizes_prompt_file(monkeypatch, tmp_path):
+    from oracle_plus.browser_mode import run_browser_cli
+
+    prompt_file = tmp_path / "prompt.md"
+    prompt_file.write_text("Review browser path.\n", encoding="utf-8")
+    captured = {}
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr("oracle_plus.browser_mode.resolve_oracle_command", lambda: ["/usr/bin/oracle"])
+    monkeypatch.setattr("oracle_plus.browser_mode.detect_host_ip", lambda: "127.0.0.1")
+
+    def fake_run_browser_with_busy_fallback(**kwargs):
+        captured["kwargs"] = kwargs
+        return 0
+
+    monkeypatch.setattr("oracle_plus.browser_mode.run_browser_with_busy_fallback", fake_run_browser_with_busy_fallback)
+
+    rc = run_browser_cli(["--prompt-file", str(prompt_file), "--model", "gpt-5.2"])
+
+    assert rc == 0
+    assert captured["kwargs"]["passthrough"] == ("-p", "Review browser path.\n", "--model", "gpt-5.2")
