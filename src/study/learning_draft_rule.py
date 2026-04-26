@@ -282,3 +282,52 @@ def analyze_judgment_density(text: str, rule: LearningDraftRule | None = None) -
         weak_paragraph_indexes=weak_indexes,
         errors=errors,
     )
+
+
+# ─── Unified Validator ──────────────────────────────────────────────
+
+def validate_learning_draft_rule(
+    text: str,
+    rule=None,
+) -> dict:
+    """Run all individual validators and combine results into a single verdict.
+
+    Returns ``{"passed": bool, "errors": list[str]}``.
+
+    A draft passes only if ALL checks pass:
+      - section order matches required_sections exactly
+      - no prohibited patterns detected
+      - judgment density threshold met (≥8 paragraphs with judgment functions)
+      - body length ≥ min_body_length_chars
+    """
+    errors: list[str] = []
+    passed = True
+
+    # 1. Section structure
+    sec_result = validate_section_structure(text, rule if rule else None)
+    if not sec_result.passed:
+        passed = False
+        errors.extend(sec_result.errors)
+
+    # 2. Prohibited patterns
+    pattern_result = detect_prohibited_patterns(text, rule)
+    if not pattern_result.passed:
+        passed = False
+        errors.extend(pattern_result.errors)
+
+    # 3. Judgment density
+    density_result = analyze_judgment_density(text, rule)
+    if not density_result.passed:
+        passed = False
+        errors.extend(density_result.errors)
+
+    # 4. Body length (if rule provides min_body_length_chars)
+    if rule is not None and hasattr(rule, 'min_body_length_chars'):
+        body_len = count_substantive_body_chars(text)
+        if body_len < rule.min_body_length_chars:
+            passed = False
+            errors.append(
+                f"body length {body_len} below minimum {rule.min_body_length_chars}"
+            )
+
+    return {"passed": passed, "errors": errors}
