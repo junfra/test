@@ -197,6 +197,58 @@ def detect_prohibited_patterns(text: str, rule=None) -> ProhibitedPatternResult:
         matches.append("repeated_boilerplate")
         errors.append("repeated boilerplate detected (same line ≥ 3 times)")
 
+    # 5. format_only_section_compliance — section headers exist but bodies are <100 chars each
+    def _check_format_only(text):
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+        if len(paragraphs) < 3:
+            return False
+        short_sections = sum(1 for p in paragraphs if len(p) < 100 and not any(kw in p.lower() for kw in ["왜냐하면", "따라서", "실패", "검증"]))
+        # If more than half of all paragraphs are very short, it's format-only compliance
+        return short_sections > len(paragraphs) / 2
+
+    if _check_format_only(text):
+        matches.append("format_only_section_compliance")
+        errors.append(
+            "section headers present but bodies are too short to support judgment (format-only compliance)"
+        )
+
+    # 6. thin_section_body — any ## section with <50 chars of substantive body
+    def _check_thin_sections(text):
+        section_re = re.compile(r"^##\s+(.+?)$", re.MULTILINE)
+        headers = [(m.start(), m.group(1).strip()) for m in section_re.finditer(text)]
+        if len(headers) < 3:
+            return False
+        thin_count = 0
+        for i, (pos, _header) in enumerate(headers):
+            end_pos = headers[i + 1][0] if i + 1 < len(headers) else len(text)
+            body = text[pos:end_pos]
+            # Remove the header line itself and blank lines
+            body_text = re.sub(r"^##\s+.+?$", "", body, flags=re.MULTILINE).strip()
+            if len(body_text) < 50:
+                thin_count += 1
+        return thin_count >= len(headers) / 2
+
+    if _check_thin_sections(text):
+        matches.append("thin_section_body")
+        errors.append(
+            "multiple sections have insufficient body content relative to header presence"
+        )
+
+    # 7. unsupported_advantage_praise — claims of advantage without supporting evidence/basis
+    ADVANTAGE_PHRASES_RE = re.compile(r"(장점|유리하다|우수하다|뛰어나다|강점이 있다|메리트가 있다)")
+    EVIDENCE_KEYWORDS_RE = re.compile(
+        r"(이유|원인|조건|검증|실패|근거|비교|차이|판단|기준|반례|원리|메커니즘)"
+    )
+    advantage_sections = ADVANTAGE_PHRASES_RE.findall(text)
+    evidence_present = EVIDENCE_KEYWORDS_RE.search(text) is not None
+
+    # If there are multiple advantage claims but no supporting evidence keywords
+    if len(advantage_sections) >= 2 and not evidence_present:
+        matches.append("unsupported_advantage_praise")
+        errors.append(
+            "multiple advantage claims without supporting evidence or reasoning"
+        )
+
     return ProhibitedPatternResult(
         passed=not bool(matches),
         matches=matches,
@@ -264,9 +316,15 @@ def analyze_judgment_density(text: str, rule: LearningDraftRule | None = None) -
             weak_indexes.append(i)
             continue
 
+        # Must have BOTH structural indicator AND semantic patterns (not just keywords)
+        has_structural = bool(re.search(
+            r"(왜냐하면|따라서|원인|결과|조건|검증|실패|근거|"  # Korean markers
+            r"because|therefore|consequently|caus[ae]|constraint|failure|mechanism)",  # English equivalents
+            paragraph, flags=re.IGNORECASE
+        ))
         matched = [name for name, pattern in JUDGMENT_FUNCTION_PATTERNS.items()
                    if pattern.search(paragraph)]
-        if not matched:
+        if not (has_structural and matched):
             weak_indexes.append(i)
 
     errors: list[str] = []
@@ -330,4 +388,16 @@ def validate_learning_draft_rule(
                 f"body length {body_len} below minimum {rule.min_body_length_chars}"
             )
 
-    return {"passed": passed, "errors": errors}
+    # Exit conditions for anti-drift enforcement (seed requirement)
+    return {
+        "passed": passed,
+        "errors": errors,
+        "exit_conditions": {
+            "rule_locked": passed,  # length, structure, density, prohibited patterns all fixed
+            "no_open_drift": passed,  # section-title-only filling no longer passes
+        },
+        "state": {
+            "rule_locked": passed,
+            "no_open_drift": passed,
+        },
+    }

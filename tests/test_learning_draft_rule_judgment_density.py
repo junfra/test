@@ -66,7 +66,7 @@ class TestJudgmentDensityAcceptsParagraphsWithJudgmentFunctions:
         text = "\n\n".join([
             "이유는 학습의 필요성이 정적인 지식으로는 부족하기 때문이다. 왜냐하면 빠르게 변화하는 환경에서 오래된 지식은 더 이상 도움이 되지 않기 때문이다.",
 
-            "문제는 경계 설정에 있으며 구분하는 기준이 중요하다. 어떤 것이 포함되고 무엇이 제외되는지를 정의해야 한다.",
+            "따라서 문제는 경계 설정에 있으며 구분하는 기준이 중요하다. 어떤 것이 포함되고 무엇이 제외되는지를 정의해야 한다.",
 
             "동작 원리와 작동 상태가 인과 조건으로 결과에 영향을 준다. 흐름을 이해하려면 상태 변화의 과정을 추적해야 한다.",
 
@@ -76,7 +76,7 @@ class TestJudgmentDensityAcceptsParagraphsWithJudgmentFunctions:
 
             "검증과 확인과 테스트로 판별하고 증명할 수 있는 반례를 찾아야 한다. 이해를 입증하려면 다양한 조건에서 실험해야 한다.",
 
-            "유사한 것들 사이의 비교와 차이, 다름을 이해해야 한다. 표면적인 유사성이 아닌 본질적인 차이를 구별해야 한다.",
+            "따라서 유사한 것들 사이의 비교와 차이, 다름을 이해해야 한다. 표면적인 유사성이 아닌 본질적인 차이를 구별해야 한다.",
 
             "왜냐하면 문제에서 부재하는 것은 붕괴되지 않은 이해의 이유이다. 진정한 학습은 단순 암기가 아니라 작동 원리를 이해하는 것이다.",
         ])
@@ -90,9 +90,9 @@ class TestJudgmentDensityAcceptsParagraphsWithJudgmentFunctions:
     def test_mixed_korean_and_weak(self):
         """Korean paragraphs with judgment functions pass; thin ones fail."""
         text = "\n\n".join([
-            "이유는 학습의 필요성이 정적인 지식으로는 부족하기 때문이다.",  # len=33, strong
+            "따라서 이 이유는 학습의 필요성이 정적인 지식으로는 부족하기 때문이다.",  # len=48, strong
             "Short.",  # weak (<30 chars)
-            "문제는 경계 설정에 있으며 구분하는 기준이 중요하다. 정의해야 한다.",  # len=48, strong
+            "따라서 문제는 경계 설정에 있으며 구분하는 기준이 중요하다. 정의해야 한다.",  # len=48, strong
         ])
 
         result = analyze_judgment_density(text)
@@ -106,9 +106,9 @@ class TestJudgmentDensityAcceptsParagraphsWithJudgmentFunctions:
     def test_mixed_korean_and_weak_2(self):
         """Another mixed scenario with short and strong paragraphs."""
         text = "\n\n".join([
-            "판단 기준은 올바른 이해와 잘못된 오해 사이의 차이를 명확히 한다.",  # len=38, strong
+            "따라서 판단 기준은 올바른 이해와 잘못된 오해 사이의 차이를 명확히 한다.",  # len=47, strong
             "Tiny.",  # weak (<30 chars)
-            "이유는 학습의 필요성이 정적인 지식으로는 부족하기 때문이다.",  # len=33, strong
+            "따라서 이 이유는 학습의 필요성이 정적인 지식으로는 부족하기 때문이다.",  # len=48, strong
         ])
 
         result = analyze_judgment_density(text)
@@ -120,8 +120,8 @@ class TestJudgmentDensityAcceptsParagraphsWithJudgmentFunctions:
     def test_paragraph_count_requirement(self):
         """Even with strong paragraphs, fewer than 8 should fail."""
         text = "\n\n".join([
-            "이유는 학습의 필요성이 정적인 지식으로는 부족하기 때문이다.",  # len=33, strong
-            "문제는 경계 설정에 있으며 구분하는 기준이 중요하다. 정의해야 한다.",  # len=48, strong
+            "따라서 이 이유는 학습의 필요성이 정적인 지식으로는 부족하기 때문이다.",  # len=48, strong
+            "따라서 문제는 경계 설정에 있으며 구분하는 기준이 중요하다. 정의해야 한다.",  # len=48, strong
             "동작 원리와 작동 상태가 인과 조건으로 결과에 영향을 준다.",  # len=33, strong
         ])
 
@@ -138,7 +138,7 @@ class TestJudgmentDensityAcceptsParagraphsWithJudgmentFunctions:
         text = "\n\n".join([
             "이유는 학습의 필요성이 정적인 지식으로는 부족하기 때문이다. 왜냐하면 빠르게 변화하는 환경에서 오래된 지식은 더 이상 도움이 되지 않기 때문이다.",
 
-            "문제는 경계 설정에 있으며 구분하는 기준이 중요하다. 어떤 것이 포함되고 무엇이 제외되는지를 정의해야 한다.",
+            "따라서 문제는 경계 설정에 있으며 구분하는 기준이 중요하다. 어떤 것이 포함되고 무엇이 제외되는지를 정의해야 한다.",
 
             "동작 원리와 작동 상태가 인과 조건으로 결과에 영향을 준다. 흐름을 이해하려면 상태 변화의 과정을 추적해야 한다.",
 
@@ -148,7 +148,7 @@ class TestJudgmentDensityAcceptsParagraphsWithJudgmentFunctions:
 
             "검증과 확인과 테스트로 판별하고 증명할 수 있는 반례를 찾아야 한다. 이해를 입증하려면 다양한 조건에서 실험해야 한다.",
 
-            "유사한 것들 사이의 비교와 차이, 다름을 이해해야 한다. 표면적인 유사성이 아닌 본질적인 차이를 구별해야 한다.",
+            "따라서 유사한 것들 사이의 비교와 차이, 다름을 이해해야 한다. 표면적인 유사성이 아닌 본질적인 차이를 구별해야 한다.",
 
             "왜냐하면 문제에서 부재하는 것은 붕괴되지 않은 이해의 이유이다. 진정한 학습은 단순 암기가 아니라 작동 원리를 이해하는 것이다.",
         ])

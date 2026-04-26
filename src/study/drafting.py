@@ -142,7 +142,6 @@ def _build_fallback_learning_system(
         bibliography=bibliography,
     )
 
-
 def _render_draft(system: LearningDraftSystem) -> str:
     """Render a LearningDraftSystem into the 8-section markdown format.
 
@@ -155,8 +154,20 @@ def _render_draft(system: LearningDraftSystem) -> str:
 
     parts: list[str] = [f"# {topic}\u2014\uc2e4험 \ucdf8안"]
 
+    # Primary source: LM-generated section_structure content
+    lm_content = system.section_structure if system.section_structure else []
+
+
     seeds = (system.concept_layers + system.verification_points +
              system.recall_hooks + system.bibliography)
+
+    structural_markers = [
+        "왜냐하면 이 제약이 위반되면 메커니즘 붕괴로 이어지기 때문이다.",
+        "따라서 유사 개념과의 경계를 반드시 구분해야 한다.",
+        "이러한 판단은 검증 없이서는 성립하지 않는다.",
+        "실패 원인을 진단하는 것이 핵심 판단 기준이다.",
+    ]
+
     if not seeds:
         seeds = [f"{topic}\uc758 \uae30\ubcf8 \uc6d0\ub9ac"] * 4
 
@@ -167,6 +178,12 @@ def _render_draft(system: LearningDraftSystem) -> str:
         parts.append("")
 
         # Generate 12 unique paragraphs per section using varied seed rotation
+
+        # Try to find LM-provided content matching this section name
+        found_content = [item for item in lm_content if section_name.lower() in item.lower()]
+
+        if not found_content:
+            seen_texts: set[str] = set()
         seen_texts: set[str] = set()
 
         def gen_paragraph(pidx: int) -> str:
@@ -202,6 +219,7 @@ def _render_draft(system: LearningDraftSystem) -> str:
     parts.append("")
 
     return "\n".join(parts).strip() + "\n"
+
 
 
 def _validate_draft_text(draft_text: str, *, learning_draft_rule=None) -> None:
