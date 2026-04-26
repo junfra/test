@@ -82,25 +82,34 @@ def _extract_chapters_as_fallback(draft_text: str) -> list[tuple[str, str, str]]
     """Fallback for drafts without ## headers — use # Chapter headers as sections."""
     lines = draft_text.splitlines()
     chapters: list[tuple[str, str, str]] = []
-    current_title = None
-    section_lines: list[str] = []
 
-    for line in lines:
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        
         if re.match(r"^# (References|# Bibliography)", line):
-            # Flush last chapter before stopping
-            _flush_section(chapters, current_title, current_title, "\n".join(section_lines))
             break
         
+        # Match chapter header: starts with # but not ##
         if line.startswith("#") and not line.startswith("##"):
             title = line.strip().lstrip("# ").strip()
-            # If we have a previous chapter with content, flush it first
-            if current_title:
-                _flush_section(chapters, current_title, current_title, "\n".join(section_lines))
-            current_title = title
-            section_lines = []
+            
+            # Collect content lines until next header or empty run of blanks
+            i += 1
+            content_lines = []
+            while i < len(lines):
+                next_line = lines[i]
+                if re.match(r"^[#]", next_line) and not next_line.startswith("##"):
+                    break  # hit another chapter header
+                if re.match(r"^# (References|# Bibliography)", next_line):
+                    break
+                content_lines.append(next_line)
+                i += 1
+            
+            text = "\n".join(content_lines).strip()
+            _flush_section(chapters, title, title, text)
         else:
-            if line.strip():  # skip blank lines
-                section_lines.append(line)
+            i += 1
 
     return chapters
 

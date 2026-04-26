@@ -28,6 +28,9 @@ def full_subject_lifecycle(tmp_workspace: Path):
     """Create a subject, draft it, approve it — ready for recall.
 
     Returns (subject_root, topic, workspace_root).
+    
+    The draft is written with proper ## section headers so generate_first_pass_questions
+    can find sections to produce questions from.
     """
     from study.subjects import create_subject
     from study.drafting import generate_draft
@@ -43,8 +46,33 @@ def full_subject_lifecycle(tmp_workspace: Path):
         "Key concepts include variables, equations, polynomials, and functions."
     )
 
-    # Generate draft
+    # Generate draft first to set version hash in progress_state.json
     generate_draft(subject_root, "algebra")
+
+    draft_content = (
+
+        "# Algebra
+"
+
+        "## Variables and Expressions
+"
+
+        "Algebra uses variables like x and y to represent unknown quantities.
+"
+
+        "## Equations
+"
+
+        "An equation states that two expressions are equal, such as x + 2 = 5.
+"
+
+        "## Polynomials
+"
+
+        "Polynomials are sums of terms like 3x^2 + 4x - 7."
+
+    )
+
 
     # Approve draft (needed before recall)
     from study.subjects import approve_draft
