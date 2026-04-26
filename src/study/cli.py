@@ -108,3 +108,39 @@ def _approve(subject_id: str) -> None:  # noqa: D401 — CLI docs
 
 if __name__ == "__main__":
     main()
+
+
+# ---- recall -------------------------------------------------------------- #
+
+@main.command("recall")
+@click.argument("subject_id", type=str)
+@click.option("--mode", "mode", type=click.Choice(["first-pass", "adaptive"]), default="first-pass")
+def cmd_recall(subject_id: str, mode: str) -> None:  # noqa: D401 — CLI docs
+    """Run a recall session on an approved draft.
+
+    \b
+        study recall <subject_id> --mode=first-pass
+    """
+    from .recall import generate_first_pass_questions as _gpq
+    from pathlib import Path as P
+
+    root = P.cwd() / "subjects" / subject_id
+    if not (root / "progress_state.json").exists():
+        click.echo(f"Subject '{subject_id}' not found at {root}.", err=True)
+        raise SystemExit(1)
+
+    questions = _gpq(root, n=5)
+
+    click.echo(f"Generated {len(questions)} recall question(s):")
+    for q in questions:
+        click.echo(f"\n  [{q.id}] {q.topic}")
+        click.echo(f"    {q.prompt[:80]}...")
+
+
+# ---- version ------------------------------------------------------------- #
+
+@main.command("version")
+def _version() -> None:  # noqa: D401 — CLI docs
+    """Print the current study-harness version."""
+    import pkg_resources  # type: ignore[import-untyped]
+    click.echo(f"study-harness {pkg_resources.get_distribution('study-harness').version}")
