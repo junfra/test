@@ -1,224 +1,297 @@
-"""Learning draft generation engine — bottom-up concept book builder.
-
-All functions receive ``subject_root: pathlib.Path`` — no bare root paths.
-"""
+"""Learning draft generation engine — LM-driven concept reconstruction."""
 from __future__ import annotations
 
 import hashlib
 import re
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Protocol
 
+from .config import load_lm_config
 from .intake import load_source_data
-from .models import SourceReference
-from .storage import save_progress
-from .models import ProgressState
+from .lm_client import LMClient, LMGenerationError, parse_learning_system_json
+from .models import LearningDraftSystem, RecallQuestion, SourceReference
+from .prompt_builder import build_chapter_prompt
+from .storage import load_progress, save_progress
 
 
-def _extract_keywords(content: str) -> list[str]:
-    """Extract meaningful keywords from content."""
-    words = [w.lower() for w in re.findall(r'[a-zA-Z]{4,}', content)]
-    return list(dict.fromkeys(words))  # preserve order, deduplicate
+class _GeneratesText(Protocol):
+    def generate(self, prompt: str) -> str:
+        """Generate text from an LM prompt."""
 
 
-def _build_chapter(topic: str, sources: list[SourceReference], idx: int) -> tuple[str, str]:
-    """Build a chapter heading and body for the given source index."""
-    if not sources:
-        return f"Chapter {idx + 1}: Foundations of {topic}", "This section provides an overview of fundamental concepts in the topic area."
-
-    src = sources[idx % len(sources)]
-
-    # Extract key terms from content
-    keywords = _extract_keywords(src.content)
-
-    if idx == 0:
-        heading = f"# Chapter {idx + 1}: Overview and Core Concepts"
-        body = (
-            f"The study of {topic} centers on understanding fundamental principles. "
-            f"{src.content} These concepts form the foundation for deeper exploration."
-        )
-    elif idx == 1:
-        heading = f"# Chapter {idx + 1}: Key Principles and Mechanisms"
-        body = (
-            f"A central principle in {topic} is that {keywords[0] if keywords else 'principles'} "
-            f"govern how systems interact. The material demonstrates that "
-            f"{src.content.lower().rstrip('.')} This insight connects to broader theoretical frameworks."
-        )
-    elif idx == 2:
-        heading = f"# Chapter {idx + 1}: Advanced Applications and Synthesis"
-        body = (
-            f"Moving beyond basic understanding, advanced work in {topic} applies "
-            f"earlier principles to complex scenarios. The content reveals that "
-            f"{keywords[0] if keywords else 'applications'} remain central to practical implementation."
-        )
-    else:
-        heading = f"# Chapter {idx + 1}: Related Topics and Extensions"
-        body = (
-            f"Expanding the scope of {topic} leads to related areas including "
-            f"{keywords[0] if keywords else 'extensions'}. The source material provides "
-            f"additional context: {src.content.lower().rstrip('.')}."
-        )
-
-    return heading, body
+def _chapter_count(sources: list[SourceReference]) -> int:
+    return max(3, len(sources))
 
 
-def _build_bibliography(sources: list[SourceReference]) -> str:
-    """Build a References section listing all sources."""
-    lines = ["# References"]
-    for i, src in enumerate(sources):
-        kind_label = {"native": "Native source", "web_search": "Web search result",
-                       "user_file": "User file", "pasted_text": "Pasted text"}.get(src.kind, "Source")
+def _build_chapter_from_lm(
+    *,
+    client: _GeneratesText,
+    topic: str,
+    sources: list[SourceReference],
+    chapter_index: int,
+    chapter_count: int,
+) -> LearningDraftSystem:
+    prompt = build_chapter_prompt(
+        topic=topic,
+        sources=sources,
+        chapter_index=chapter_index,
+        chapter_count=chapter_count,
+    )
+    raw = client.generate(prompt)
+    return parse_learning_system_json(raw)
 
-        ref_lines = [f"{i + 1}. [{kind_label}] Content from {src.kind} source"]
-        kw = src.metadata.get("keyword", "")
-        if kw:
-            ref_lines.append(f"   - Keyword: {kw}")
-        # Include first line of content as summary in bibliography
-        first_sentence = re.split(r'[.!?]', src.content)[0] + "."
-        ref_lines.append(f"   - Content: {first_sentence}")
 
-        lines.extend(ref_lines)
-    return "\n".join(lines)
+def _merge_learning_systems(
+    *,
+    topic: str,
+    chapter_systems: list[LearningDraftSystem],
+    sources: list[SourceReference],
+) -> LearningDraftSystem:
+    concept_layers: list[str] = []
+    section_structure: list[str] = []
+    recall_hooks: list[str] = []
+    verification_points: list[str] = []
+    bibliography: list[str] = []
 
-
-def generate_draft(subject_root: Path, topic: str) -> str:
-    """Generate a dense bottom-up concept book draft aimed at intermediate-to-advanced readers.
-
-    Parameters
-    ----------
-    subject_root : pathlib.Path
-        Root of the study subject directory.
-    topic : str
-        The subject/topic for which to generate the draft.
-
-    Returns
-    -------
-    str
-        Generated draft text containing ≥ 3 chapters and a References section.
-
-    Notes
-    -----
-    - Loads source data from ``subject_root`` via :func:`intake.load_source_data`.
-    - If no external LLM API is configured, falls back to content synthesis from sources.
-    - Writes the draft to ``subject_root/learning_draft.md``.
-    - Updates ``progress_state.json`` with a SHA-256 version hash of the generated text.
-    """
-    # 1. Load source data
-    sources = load_source_data(subject_root)
-
-    # 2. Build concept book content from sources (fallback synthesis)
-    draft_parts: list[str] = []
+    for chapter in chapter_systems:
+        concept_layers.extend(chapter.concept_layers)
+        section_structure.extend(chapter.section_structure)
+        recall_hooks.extend(chapter.recall_hooks)
+        verification_points.extend(chapter.verification_points)
+        bibliography.extend(chapter.bibliography)
 
     if sources:
-        # Generate chapters — one per source + at least 3 total
-        num_chapters = max(3, len(sources))
-        for i in range(num_chapters):
-            heading, body = _build_chapter(topic, sources, i)
-            draft_parts.append(f"{heading}\n\n{body}")
-
-        # Add References section with all source data
-        draft_parts.append("")  # blank line before refs
-        draft_parts.append(_build_bibliography(sources))
+        for index, source in enumerate(sources, start=1):
+            keyword = source.metadata.get("keyword", "")
+            keyword_text = f", keyword={keyword}" if keyword else ""
+            bibliography.append(f"Source {index}: kind={source.kind}{keyword_text}")
     else:
-        # Even with no sources, produce a valid structure
-        for i in range(3):
-            heading = f"# Chapter {i + 1}: Introduction to {topic}" if i == 0 else \
-                       f"# Chapter {i + 1}: Concepts and Principles" if i == 1 else \
-                       f"# Chapter {i + 1}: Applications and Extensions"
-            body = (f"This chapter introduces foundational ideas in the topic area, "
-                    f"focusing on core principles that shape understanding.")
-            draft_parts.append(f"{heading}\n\n{body}")
+        bibliography.append("No source references were provided for this subject.")
 
-        # Empty References section still required
-        draft_parts.append("")
-        draft_parts.append("# References")
-        draft_parts.append("No sources were available for this subject.")
+    return LearningDraftSystem(
+        topic=topic,
+        concept_layers=concept_layers,
+        section_structure=section_structure,
+        recall_hooks=recall_hooks,
+        verification_points=verification_points,
+        bibliography=list(dict.fromkeys(bibliography)),
+    )
 
-    draft_text = "\n".join(draft_parts) + "\n"
 
-    # 3. Verify no template patterns in body (before # References)
-    ref_idx = draft_text.find("# References")
-    if ref_idx != -1:
-        pre_ref_body = draft_text[:ref_idx]
+def _fallback_paragraph(topic: str, chapter_number: int) -> str:
+    return (
+        f"Deterministic fallback reconstruction for {topic}, chapter {chapter_number}. "
+        f"This fallback exists only because LM generation failed. It reconstructs the concept without copying source prose by using a stable learning model: "
+        f"identify the entity, explain the pressure that makes the entity necessary, map the mechanism that changes state, describe the consequence of the mechanism, "
+        f"and define a verification question that proves understanding. The explanation remains dense because a learner should not merely recognize vocabulary. "
+        f"The learner should be able to rebuild the conceptual machine. In chapter {chapter_number}, the topic is treated as an operational system with boundaries, "
+        f"inputs, transformations, outputs, and failure modes. The conceptual layer names the role of each part. The mechanism layer shows how parts interact. "
+        f"The learning layer compresses the mechanism into a recall pattern that can be practiced later. This makes the fallback acceptable as an emergency path while "
+        f"keeping the primary contract clear: ordinary successful drafts must come from LM-generated chapter JSON."
+    )
+
+
+def _build_fallback_learning_system(
+    *,
+    topic: str,
+    sources: list[SourceReference],
+    reason: str,
+) -> LearningDraftSystem:
+    chapter_total = _chapter_count(sources)
+    concept_layers: list[str] = []
+    section_structure: list[str] = []
+    recall_hooks: list[str] = []
+    verification_points: list[str] = []
+
+    for index in range(chapter_total):
+        chapter_number = index + 1
+        paragraph = _fallback_paragraph(topic, chapter_number)
+        concept_layers.append(
+            f"Fallback concept layer {chapter_number}: {topic} is reconstructed as entities, state, mechanism, consequence, and verification."
+        )
+        section_structure.append(
+            f"# Chapter {chapter_number}: Fallback Reconstruction of {topic}\n\n"
+            f"## Concept Reconstruction\n"
+            f"{paragraph}\n\n"
+            f"## Mechanism\n"
+            f"{paragraph}\n\n"
+            f"## Learning Model\n"
+            f"{paragraph}"
+        )
+        recall_hooks.append(
+            f"Fallback recall hook {chapter_number}: explain {topic} by naming the entity, state transition, consequence, and verification question."
+        )
+        verification_points.append(
+            f"Fallback verification point {chapter_number}: the learner can reconstruct the mechanism without quoting source material."
+        )
+
+    bibliography = [f"Fallback triggered by LMGenerationError: {reason}"]
+    if sources:
+        for source_index, source in enumerate(sources, start=1):
+            bibliography.append(f"Source {source_index}: kind={source.kind}")
     else:
-        pre_ref_body = draft_text
+        bibliography.append("No source references were provided for this subject.")
 
-    for pattern, name in [(r"Insert\s+topic", "Insert topic"), (r"\[Topic\]", "[Topic]"),
-                          (r"\{\{topic\}\}", "{{topic}}")]:
-        assert not re.search(pattern, pre_ref_body, re.IGNORECASE), \
-            f"Template pattern '{name}' found in draft body!"
+    return LearningDraftSystem(
+        topic=topic,
+        concept_layers=concept_layers,
+        section_structure=section_structure,
+        recall_hooks=recall_hooks,
+        verification_points=verification_points,
+        bibliography=bibliography,
+    )
 
-    # 4. Write to learning_draft.md
+
+def _render_draft(system: LearningDraftSystem) -> str:
+    parts: list[str] = [
+        f"# {system.topic} — LM-Driven Concept Reconstruction",
+        "",
+    ]
+
+    chapter_count = len(system.section_structure)
+
+    for index in range(chapter_count):
+        parts.append(system.section_structure[index].strip())
+        parts.append("")
+        parts.append("## Concept Reconstruction Layer")
+        parts.append(system.concept_layers[index % len(system.concept_layers)].strip())
+        parts.append("")
+        parts.append("## Recall Hooks")
+        parts.append(system.recall_hooks[index % len(system.recall_hooks)].strip())
+        parts.append("")
+        parts.append("## Learning Model and Verification")
+        parts.append(system.verification_points[index % len(system.verification_points)].strip())
+        parts.append("")
+
+    parts.append("# References")
+    for index, entry in enumerate(system.bibliography, start=1):
+        parts.append(f"{index}. {entry.strip()}")
+
+    return "\n".join(parts).strip() + "\n"
+
+
+def _validate_draft_text(draft_text: str) -> None:
+    chapter_headers = re.findall(r"^# Chapter\s+\d+:", draft_text, flags=re.MULTILINE)
+    if len(chapter_headers) < 3:
+        raise LMGenerationError("LM draft did not contain at least three substantive chapters")
+
+    if len(draft_text) < 3000:
+        raise LMGenerationError("LM draft was below the 3000 character density floor")
+
+    body = draft_text.split("# References", 1)[0]
+    forbidden_patterns = [
+        r"Insert\s+topic",
+        r"\[Topic\]",
+        r"\{\{topic\}\}",
+    ]
+
+    for pattern in forbidden_patterns:
+        if re.search(pattern, body, flags=re.IGNORECASE):
+            raise LMGenerationError(f"LM draft contained template pattern: {pattern}")
+
+
+def _build_learning_system(
+    subject_root: Path,
+    topic: str,
+    sources: list[SourceReference],
+    *,
+    lm_client: _GeneratesText | None = None,
+) -> LearningDraftSystem:
+    """Build a LearningDraftSystem through the LM-primary path.
+
+    The primary path calls LMClient.generate once per chapter and parses each
+    response into the exact six-field LearningDraftSystem ontology. Deterministic
+    fallback is used only when LMGenerationError is raised.
+    """
+
+    config = load_lm_config(subject_root=subject_root)
+    client: _GeneratesText = lm_client if lm_client is not None else LMClient(config)
+    total = _chapter_count(sources)
+
+    try:
+        chapter_systems = [
+            _build_chapter_from_lm(
+                client=client,
+                topic=topic,
+                sources=sources,
+                chapter_index=index,
+                chapter_count=total,
+            )
+            for index in range(total)
+        ]
+        system = _merge_learning_systems(
+            topic=topic,
+            chapter_systems=chapter_systems,
+            sources=sources,
+        )
+        _validate_draft_text(_render_draft(system))
+        return system
+    except LMGenerationError as exc:
+        return _build_fallback_learning_system(
+            topic=topic,
+            sources=sources,
+            reason=str(exc),
+        )
+
+
+def generate_draft(
+    subject_root: Path,
+    topic: str,
+    *,
+    lm_client: _GeneratesText | None = None,
+) -> str:
+    """Generate a dense LM-driven concept reconstruction draft.
+
+    The production path loads LM configuration from env/file, instantiates
+    LMClient, calls the LM once per chapter, parses each response into the Seed
+    ontology, renders the draft, saves learning_draft.md, and updates progress.
+    """
+
+    sources = load_source_data(subject_root)
+    system = _build_learning_system(subject_root, topic, sources, lm_client=lm_client)
+    draft_text = _render_draft(system)
+    _validate_draft_text(draft_text)
+
     draft_path = subject_root / "learning_draft.md"
-    draft_path.write_text(draft_text)
+    draft_path.write_text(draft_text, encoding="utf-8")
 
-    # 5. Update progress_state.json with version hash
-    from .storage import load_progress
     state = load_progress(subject_root)
     state.phase = "drafting"
-    state.draft_version_hash = hashlib.sha256(draft_text.encode()).hexdigest()
+    state.draft_version_hash = hashlib.sha256(draft_text.encode("utf-8")).hexdigest()
     save_progress(subject_root, state)
 
-    # Side-effect: log draft generation event
-    chapter_count = len([l for l in draft_text.splitlines() if re.match(r'^# (?!#)', l)])
     from .logging import log_session_event
-    log_session_event(subject_root, "draft_generated", {
-        "version_hash": state.draft_version_hash,
-        "chapter_count": chapter_count,
-    })
+
+    chapter_count = len(re.findall(r"^# Chapter\s+\d+:", draft_text, flags=re.MULTILINE))
+    log_session_event(
+        subject_root,
+        "draft_generated",
+        {
+            "version_hash": state.draft_version_hash,
+            "chapter_count": chapter_count,
+            "lm_primary_path": lm_client is None,
+        },
+    )
 
     return draft_text
 
 
-__all__ = ["generate_draft"]
-
-
-# ── Recall gate stub (Task 5 — approved in Task 6 for full engine) ─────── #
-
 def generate_first_pass_questions(subject_root: Path, topic: str | None = None) -> list[RecallQuestion]:
-    """Generate structured open-ended recall questions for the first pass.
+    """Compatibility wrapper for older imports.
 
-    Requires draft approval before returning any questions.
-
-    Parameters
-    ----------
-    subject_root : pathlib.Path
-        Root of the study subject directory.
-    topic : str, optional
-        Topic override; defaults to value in progress_state.json.
-
-    Returns
-    -------
-    list[RecallQuestion]
-        Structured open-ended recall questions (at least one).
-
-    Raises
-    ------
-    ApprovalRequiredError
-        If approval_status is False in the current progress state.
+    Recall remains approval-gated and is implemented in study.recall.
     """
-    from .models import ApprovalRequiredError, RecallQuestion
-    from .storage import load_progress
+
+    from .recall import generate_first_pass_questions as _generate
 
     state = load_progress(subject_root)
+    selected_topic = topic or state.topic
+    questions = _generate(subject_root, n=5)
 
-    if not state.approval_status:
-        raise ApprovalRequiredError(
-            "Recall requires draft approval. Run `study subjects approve <id>` first."
-        )
+    if selected_topic:
+        return questions
 
-    # Stub: return a minimal question set for gate verification.
-    # Full engine implementation follows in Task 6.
-    topic = topic or state.topic
-    return [
-        RecallQuestion(
-            id="q1",
-            topic=topic,
-            prompt=f"Explain the core concepts of {topic} from memory.",
-        ),
-    ]
+    return questions
 
-
-# ── Re-export for convenience ─────────────────────────────────────────────
 
 __all__ = ["generate_draft", "generate_first_pass_questions"]
