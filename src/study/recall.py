@@ -27,18 +27,17 @@ def extract_sections(draft_text: str) -> list[tuple[str, str, str]]:
     current_title: str | None = None
 
     for line in lines:
-        # New top-level chapter resets context
-        if re.match(r"^[#]+", line):
-            _flush_section(sections, current_chapter, current_title, "\n".join(section_lines))
-            current_chapter = line.strip().lstrip("# ").strip()
-            current_title = None
-            section_lines = []
-
-        # Section header starts a new section
-        elif re.match(r"^##\s+", line):
+        # Section header (##) must be checked BEFORE top-level chapter (#)
+        if re.match(r"^##\s+", line):
             _flush_section(sections, current_chapter, current_title, "\n".join(section_lines))
             current_title = line.strip().lstrip("# ").strip()
             section_lines = [line]  # keep header in content for context
+
+        elif re.match(r"^#+\s", line):
+            _flush_section(sections, current_chapter, current_title, "\n".join(section_lines))
+            current_chapter = line.strip().lstrip("# ").strip()
+            current_title = current_chapter  # Default to chapter title for first section
+            section_lines = []
 
         else:
             section_lines.append(line)
@@ -161,9 +160,14 @@ def generate_first_pass_questions(
 
     # 3. Generate structured open-ended prompts per section (up to n)
     questions: list[RecallQuestion] = []
-    for i, (chapter, title, _content) in enumerate(sections[:n]):
+    for i, (chapter, title, _content) in enumerate(sections):
+        # Skip chapter-only sections (where title == chapter, meaning no ## header)
+        if title == chapter:
+            continue
+        if len(questions) >= n:
+            break
         q = RecallQuestion(
-            id=f"q_{i + 1}",
+            id=f"q_{len(questions) + 1}",
             topic=title,
             prompt=(
                 f"Based on the draft '{title}' under '{chapter}', "
@@ -175,7 +179,7 @@ def generate_first_pass_questions(
     # 4. Update progress_state.json — phase and cursor
     state = load_progress(subject_root)
     state.phase = "recall_first_pass"
-    state.next_recursors_cursor = len(questions)
+    state.next_recursors_cursor = max(state.next_recursors_cursor, len(questions))
     save_progress(subject_root, state)
 
     return questions

@@ -56,7 +56,7 @@ def test_weak_points_prioritized_in_random_order():
     ws = _make_seed_dir("prioritized")
     subject_root = create_subject(ws, "seed-pri", "Seed prioritized")
 
-    draft_content = "# Seed Drafting\n\n## Section A\n\nSection A covers strong topics.\n\n## Section B\n\nSection B is about misconceptions."
+    draft_content = "# Seed Drafting\n\n## Section A\n\nSection A covers strong topics.\n\n## Section B\n\nSection B is about misconceptions.\n"
     # generate a draft first to set the hash, then overwrite content
     generate_draft(subject_root, "Seed Drafting")
     (subject_root / "learning_draft.md").write_text(draft_content)
@@ -72,6 +72,11 @@ def test_weak_points_prioritized_in_random_order():
     assert len(profile.weak_points) >= 1
     assert any(wp.topic == "Section B" for wp in profile.weak_points), \
         f"Section B should be weak. Got: {[wp.topic for wp in profile.weak_points]}"
+
+    # Explicitly verify weak points were populated
+    profile = load_progress(subject_root)
+    assert len(profile.weak_points) >= 1, f"Expected weak points, got: {profile.weak_points}"
+    assert any(wp.topic == "Section B" for wp in profile.weak_points)
 
     random.seed(42)
     retest_qs = select_next_questions_weak(subject_root, n=3)
