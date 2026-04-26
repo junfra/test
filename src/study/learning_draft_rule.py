@@ -401,3 +401,10 @@ def validate_learning_draft_rule(
             "no_open_drift": passed,
         },
     }
+
+
+# ─────────── DraftValidationError (Task 1) ───────────
+
+class DraftValidationError(RuntimeError):
+    """Raised when a generated learning draft violates the locked draft rule."""
+    pass

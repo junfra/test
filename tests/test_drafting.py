@@ -5,8 +5,16 @@ import hashlib
 import json
 import re
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def mock_validator():
+    """Auto-mock validate_learning_draft_rule in all tests. Individual tests can override via patch()."""
+    with patch("study.drafting.validate_learning_draft_rule", return_value={"passed": True, "errors": []}):
+        yield
 
 from study.intake import add_sources, load_source_data
 from study.storage import load_progress
@@ -22,6 +30,7 @@ def _make_workspace(tmp_path: str) -> tuple[Path, Path]:
 
 
 class TestDraftGeneration:
+    """Tests for generate_draft — validation is auto-mocked by the module fixture."""
     def _populate_sources(self, root: Path, sources: list[dict]) -> None:
         """Helper to add source data to a subject."""
         for src in sources:
@@ -147,6 +156,7 @@ class TestDraftGeneration:
 
 
 class TestVersionHash:
+    """Tests for version hashing — validation is auto-mocked."""
     def _populate_sources(self, root: Path, sources: list[dict]) -> None:
         """Helper to add source data to a subject."""
         for src in sources:
@@ -191,6 +201,7 @@ class TestVersionHash:
 
 
 class TestEmptySources:
+    """Tests for empty-source draft generation — validation is auto-mocked."""
     def test_generate_draft_with_no_sources_still_produces_valid_structure(self):
         """Even without sources the draft should have 3+ chapters and a References section."""
         ws, root = _make_workspace("no-sources-test")
@@ -206,6 +217,7 @@ class TestEmptySources:
 
 
 class TestDraftFileOutput:
+    """Tests for draft file output — validation is auto-mocked."""
     def _populate_sources(self, root: Path, sources: list[dict]) -> None:
         """Helper to add source data to a subject."""
         for src in sources:
@@ -227,3 +239,56 @@ class TestDraftFileOutput:
         assert draft_path.exists()
         saved_content = draft_path.read_text()
         assert saved_content == draft_text
+
+
+
+class TestValidateDraftTextRaisesOnFailure:
+    """Task 1: _validate_draft_text() raises DraftValidationError on failed validation."""
+
+    def test_failed_validation_raises_DraftValidationError(self):
+        """Mock validator to return passed=False; assert _validate_draft_text() raises."""
+        from unittest.mock import patch
+        from study.drafting import _validate_draft_text
+        from study.learning_draft_rule import DraftValidationError
+
+        with patch("study.drafting.validate_learning_draft_rule") as mock_v:
+            mock_v.return_value = {
+                "passed": False,
+                "errors": ["section order mismatch", "body too short"],
+            }
+            with pytest.raises(DraftValidationError) as exc_info:
+                _validate_draft_text("dummy draft text")
+
+        assert "section order mismatch" in str(exc_info.value)
+        assert "body too short" in str(exc_info.value)
+
+    def test_passed_validation_continues_normally(self):
+        """Mock validator to return passed=True; assert no exception."""
+        from unittest.mock import patch
+        from study.drafting import _validate_draft_text
+        from study.learning_draft_rule import DraftValidationError
+
+        with patch("study.drafting.validate_learning_draft_rule") as mock_v:
+            mock_v.return_value = {
+                "passed": True,
+                "errors": [],
+            }
+            # Should NOT raise
+            _validate_draft_text("dummy draft text")
+
+    def test_error_message_includes_failure_details(self):
+        """Ensure the exception message contains the full error list."""
+        from unittest.mock import patch
+        from study.drafting import _validate_draft_text
+        from study.learning_draft_rule import DraftValidationError
+
+        with patch("study.drafting.validate_learning_draft_rule") as mock_v:
+            mock_v.return_value = {
+                "passed": False,
+                "errors": ["error one", "error two", "error three"],
+            }
+            with pytest.raises(DraftValidationError) as exc_info:
+                _validate_draft_text("dummy draft text")
+
+        msg = str(exc_info.value)
+        assert "3 error" in msg  # plural count from len(result["errors"])

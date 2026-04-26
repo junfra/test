@@ -10,7 +10,7 @@ from .config import load_lm_config
 from .intake import load_source_data
 from .lm_client import LMClient, LMGenerationError, parse_learning_system_json
 from .models import LearningDraftRule, LearningDraftSystem, RecallQuestion, SourceReference
-from .learning_draft_rule import validate_learning_draft_rule
+from .learning_draft_rule import validate_learning_draft_rule, DraftValidationError
 from .prompt_builder import build_chapter_prompt
 from .storage import load_progress, save_progress
 
@@ -223,10 +223,19 @@ def _render_draft(system: LearningDraftSystem) -> str:
 
 
 def _validate_draft_text(draft_text: str, *, learning_draft_rule=None) -> None:
-    """Validate a rendered draft text using the LearningDraftRule."""
+    """Validate a rendered draft text using the LearningDraftRule.
+
+    Raises ``DraftValidationError`` when validation fails (any check returns
+    ``passed=False``), with all failure details in the message so callers can
+    inspect what went wrong.
+    """
     if learning_draft_rule is None:
         learning_draft_rule = LearningDraftRule.default()
-    validate_learning_draft_rule(draft_text, rule=learning_draft_rule)
+    result = validate_learning_draft_rule(draft_text, rule=learning_draft_rule)
+    if not result["passed"]:
+        raise DraftValidationError(
+            f"Learning draft validation failed with {len(result['errors'])} error(s): " + "; ".join(result["errors"])
+        )
 
 
 def _build_learning_system(
