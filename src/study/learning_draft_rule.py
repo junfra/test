@@ -386,6 +386,14 @@ def validate_learning_draft_rule(
             passed = False
             errors.append(
                 f"body length {body_len} below minimum {rule.min_body_length_chars}"
+            )    # 4b. Recommended range upper bound (Task 3)
+    if rule is not None and hasattr(rule, 'recommended_body_length_range'):
+        rec_range = rule.recommended_body_length_range
+        body_len = count_substantive_body_chars(text)
+        if 'max' in rec_range and body_len > rec_range['max']:
+            passed = False
+            errors.append(
+                f"body length {body_len} exceeds recommended max {rec_range['max']} (recommended range: min={rec_range.get('min', '?')}, max={rec_range['max']})"
             )
 
     # Exit conditions for anti-drift enforcement (seed requirement)
