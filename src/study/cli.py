@@ -82,3 +82,29 @@ def _delete(subject_id: str) -> None:  # noqa: D401 — CLI docs
 
 if __name__ == "__main__":
     main()
+
+
+# ── approve -------------------------------------------------------------- #
+
+@subjects_group.command("approve")
+@click.argument("subject_id", type=str)
+def _approve(subject_id: str) -> None:  # noqa: D401 — CLI docs
+    """Approve the draft so recall can begin.
+
+    \b
+        study subjects approve <subject_id>
+    """
+    from .subjects import approve_draft as _ad
+    from pathlib import Path as P
+
+    ws = P.cwd() / "subjects" / subject_id
+    if not ws.exists():
+        click.echo(f"Subject '{subject_id}' not found.", err=True)
+        raise SystemExit(1)
+
+    _ad(ws)
+    click.echo(f"Draft approved for '{subject_id}'.")
+
+
+if __name__ == "__main__":
+    main()

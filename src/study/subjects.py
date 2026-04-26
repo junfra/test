@@ -1,4 +1,4 @@
-"""Subject management logic (create, list, delete)."""
+"""Subject management logic (create, list, delete, approve)."""
 from __future__ import annotations
 
 import json
@@ -65,3 +65,26 @@ def delete_subject(subject_root: Path) -> None:
     if subject_root.exists():
         import shutil
         shutil.rmtree(subject_root)
+
+
+def approve_draft(subject_root: Path) -> None:
+    """Mark the draft as approved so recall can begin.
+
+    Updates progress_state.json with approval_status=True and phase="draft_approved".
+    The draft file (learning_draft.md) must exist for this to succeed.
+    """
+    from .storage import load_progress, save_progress
+
+    if not (subject_root / "learning_draft.md").exists():
+        raise FileNotFoundError(
+            f"learning_draft.md not found in {subject_root}. "
+            "Generate a draft first with `study subjects draft`."
+        )
+
+    state = load_progress(subject_root)
+    state.approval_status = True
+    state.phase = "draft_approved"
+    save_progress(subject_root, state)
+
+
+__all__ = ["approve_draft", "create_subject", "delete_subject", "list_subjects"]

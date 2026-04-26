@@ -162,3 +162,54 @@ def generate_draft(subject_root: Path, topic: str) -> str:
 
 
 __all__ = ["generate_draft"]
+
+
+# ── Recall gate stub (Task 5 — approved in Task 6 for full engine) ─────── #
+
+def generate_first_pass_questions(subject_root: Path, topic: str | None = None) -> list[RecallQuestion]:
+    """Generate structured open-ended recall questions for the first pass.
+
+    Requires draft approval before returning any questions.
+
+    Parameters
+    ----------
+    subject_root : pathlib.Path
+        Root of the study subject directory.
+    topic : str, optional
+        Topic override; defaults to value in progress_state.json.
+
+    Returns
+    -------
+    list[RecallQuestion]
+        Structured open-ended recall questions (at least one).
+
+    Raises
+    ------
+    ApprovalRequiredError
+        If approval_status is False in the current progress state.
+    """
+    from .models import ApprovalRequiredError, RecallQuestion
+    from .storage import load_progress
+
+    state = load_progress(subject_root)
+
+    if not state.approval_status:
+        raise ApprovalRequiredError(
+            "Recall requires draft approval. Run `study subjects approve <id>` first."
+        )
+
+    # Stub: return a minimal question set for gate verification.
+    # Full engine implementation follows in Task 6.
+    topic = topic or state.topic
+    return [
+        RecallQuestion(
+            id="q1",
+            topic=topic,
+            prompt=f"Explain the core concepts of {topic} from memory.",
+        ),
+    ]
+
+
+# ── Re-export for convenience ─────────────────────────────────────────────
+
+__all__ = ["generate_draft", "generate_first_pass_questions"]

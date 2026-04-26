@@ -11,6 +11,13 @@ class SubjectId(str):
     """Custom newtype wrapping str for subject identifiers."""
 
 
+# ── Approval gate exception ─────────────────────────────────────────────── #
+
+class ApprovalRequiredError(Exception):
+    """Raised when recall functions are called without draft approval."""
+    pass
+
+
 class SourceReference(BaseModel):
     kind: Literal["native", "web_search", "user_file", "pasted_text"]
     content: str
@@ -67,3 +74,14 @@ class RecallSessionEntry(BaseModel):
         except (ValueError, AttributeError):
             raise ValueError(f"Invalid ISO-8601 timestamp: {v}")
         return v
+
+
+__all__ = [
+    "ApprovalRequiredError",
+    "ProgressState",
+    "RecallQuestion",
+    "RecallSessionEntry",
+    "SourceReference",
+    "SubjectId",
+    "WeakPoint",
+]
