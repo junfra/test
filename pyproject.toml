@@ -1,7 +1,23 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "my-study"
 version = "0.1.0"
-description = "Add your description here"
+description = "CLI study harness for TDD-driven learning"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "click",
+    "pydantic>=2.0",
+]
+
+[project.scripts]
+study = "study.cli:main"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
