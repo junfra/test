@@ -80,11 +80,7 @@ def _delete(subject_id: str) -> None:  # noqa: D401 — CLI docs
     click.echo(f"Deleted subject '{subject_id}'.")
 
 
-if __name__ == "__main__":
-    main()
-
-
-# ── approve -------------------------------------------------------------- #
+# ---- approve ----------------------------------------------------------- #
 
 @subjects_group.command("approve")
 @click.argument("subject_id", type=str)
@@ -106,38 +102,50 @@ def _approve(subject_id: str) -> None:  # noqa: D401 — CLI docs
     click.echo(f"Draft approved for '{subject_id}'.")
 
 
-if __name__ == "__main__":
-    main()
-
-
-# ---- recall -------------------------------------------------------------- #
+# ---- recall ------------------------------------------------------------ #
 
 @main.command("recall")
+@click.option("-C", "--cwd", "workspace_root", type=click.Path(), default=None, help="Working directory (defaults to current working directory).")
 @click.argument("subject_id", type=str)
 @click.option("--mode", "mode", type=click.Choice(["first-pass", "adaptive"]), default="first-pass")
-def cmd_recall(subject_id: str, mode: str) -> None:  # noqa: D401 — CLI docs
+def cmd_recall(workspace_root: str | None, subject_id: str, mode: str) -> None:  # noqa: D401 — CLI docs
     """Run a recall session on an approved draft.
 
     \b
         study recall <subject_id> --mode=first-pass
     """
-    from .recall import generate_first_pass_questions as _gpq
+    from .storage import load_progress
     from pathlib import Path as P
 
-    root = P.cwd() / "subjects" / subject_id
+    ws = P.cwd() if workspace_root is None else P(workspace_root)
+    root = ws / "subjects" / subject_id
+
     if not (root / "progress_state.json").exists():
         click.echo(f"Subject '{subject_id}' not found at {root}.", err=True)
         raise SystemExit(1)
 
-    questions = _gpq(root, n=5)
+    # Approval gate enforcement at CLI level — verify draft is approved first.
+    state = load_progress(root)
+    if not state.approval_status:
+        click.echo("Error: draft must be approved before recall. Run 'study subjects approve <id>' first.", err=True)
+        raise SystemExit(1)
 
-    click.echo(f"Generated {len(questions)} recall question(s):")
+    # Generate questions based on mode
+    if mode == "first-pass":
+        from .recall import generate_first_pass_questions as _gpq
+        questions = _gpq(root, n=5)
+        click.echo(f"First pass recall ({len(questions)} questions):")
+    else:  # adaptive
+        from .recall import select_next_questions_weak as _snqw
+        questions = _snqw(root, n=3)
+        click.echo(f"Adaptive retest ({len(questions)} questions):")
+
     for q in questions:
-        click.echo(f"\n  [{q.id}] {q.topic}")
-        click.echo(f"    {q.prompt[:80]}...")
+        click.echo(f"\n[{q.id}] {q.topic}")
+        click.echo(f"Q: {q.prompt[:80]}...")
 
 
-# ---- version ------------------------------------------------------------- #
+# ---- version ----------------------------------------------------------- #
 
 @main.command("version")
 def _version() -> None:  # noqa: D401 — CLI docs
@@ -146,7 +154,7 @@ def _version() -> None:  # noqa: D401 — CLI docs
     click.echo(f"study-harness {pkg_resources.get_distribution('study-harness').version}")
 
 
-# ---- intake -------------------------------------------------------------- #
+# ---- intake ------------------------------------------------------------ #
 
 @main.command("intake")
 @click.option("-C", "--cwd", "workspace_root", type=click.Path(), default=None, help="Working directory (defaults to current working directory).")
@@ -174,7 +182,7 @@ def cmd_intake(workspace_root: str | None, subject_id: str, text: str):  # noqa:
     click.echo(f"Intake complete for '{subject_id}'.")
 
 
-# ---- draft --------------------------------------------------------------- #
+# ---- draft ------------------------------------------------------------- #
 
 @main.command("draft")
 @click.option("-C", "--cwd", "workspace_root", type=click.Path(), default=None, help="Working directory (defaults to current working directory).")
@@ -209,3 +217,7 @@ def cmd_draft(workspace_root: str | None, subject_id: str):  # noqa: D401 — CL
     click.echo(f"Chapters: {len(chapters)}")
     if state.draft_version_hash is not None and len(state.draft_version_hash) > 16:
         click.echo(f"Version hash: {state.draft_version_hash[:16]}...")
+
+
+if __name__ == "__main__":
+    main()
