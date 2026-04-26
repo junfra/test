@@ -144,3 +144,31 @@ def _version() -> None:  # noqa: D401 — CLI docs
     """Print the current study-harness version."""
     import pkg_resources  # type: ignore[import-untyped]
     click.echo(f"study-harness {pkg_resources.get_distribution('study-harness').version}")
+
+
+# ---- intake -------------------------------------------------------------- #
+
+@main.command("intake")
+@click.option("-C", "--cwd", "workspace_root", type=click.Path(), default=None, help="Working directory (defaults to current working directory).")
+@click.argument("subject_id", type=str)
+@click.option("--text", required=True, help="Content to intake as a source.")
+def cmd_intake(workspace_root: str | None, subject_id: str, text: str):  # noqa: D401 — CLI docs
+    """Intake user-provided text content into a subject's source data.
+
+    \b
+        study intake <subject_id> --text "content"
+    """
+    from pathlib import Path as P
+
+    ws = P.cwd() if workspace_root is None else P(workspace_root)
+    subject_dir = ws / "subjects" / subject_id
+
+    if not (subject_dir / "progress_state.json").exists():
+        click.echo(f"Error: subject '{subject_id}' not found at {subject_dir}.", err=True)
+        raise SystemExit(1)
+
+    from .models import SourceReference
+    from .intake import add_sources as _add
+
+    _add(subject_dir, [SourceReference(kind="pasted_text", content=text)])
+    click.echo(f"Intake complete for '{subject_id}'.")
