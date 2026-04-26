@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -152,4 +152,53 @@ __all__ = [
     "SourceReference",
     "SubjectId",
     "WeakPoint",
+    "LearningDraftRule",
 ]
+
+
+class LearningDraftRule(BaseModel):
+    """Validation rules for generated learning drafts."""
+
+    DEFAULT_REQUIRED_SECTIONS: ClassVar[list[str]] = [
+        "문제 배경", "개념 정의", "동작 원리", "핵심 판단 기준",
+        "실패 사례", "검증 방법", "유사 개념 비교", "복습 질문",
+    ]
+
+    target_audience: str = Field(default="first-time learners")
+    min_body_length_chars: int = Field(default=5000)
+    recommended_body_length_range: dict[str, int] = Field(
+        default_factory=lambda: {"min": 5000, "max": 7000}
+    )
+    required_sections: list[str] = Field(
+        default_factory=lambda: LearningDraftRule.DEFAULT_REQUIRED_SECTIONS.copy()
+    )
+    required_functions: list[str] = Field(default_factory=lambda: [
+        "necessity_judgment", "boundary_judgment", "mechanism_judgment",
+        "correctness_judgment", "failure_diagnosis", "verification_judgment",
+        "similarity_boundary_judgment", "self_explanation_prompt",
+        "judgment_function_per_paragraph",
+    ])
+    prohibited_patterns: list[str] = Field(default_factory=lambda: [
+        "template_placeholder", "format_only_section_compliance",
+        "generic_importance_claim", "repeated_boilerplate",
+        "thin_section_body", "unsupported_advantage_praise",
+        "procedure_without_causality",
+    ])
+    density_tests: list[str] = Field(default_factory=lambda: [
+        "body_length_excludes_title_toc_references",
+        "strict_required_section_order", "minimum_section_body_length",
+        "judgment_function_per_paragraph", "low_repetition_ratio",
+        "format_only_section_compliance", "causal_linkage_across_core_sections",
+    ])
+    pass_criteria: str = Field(
+        default="Pass only when the draft has 5000+ body characters, all 8 required sections in strict order..."
+    )
+
+    @classmethod
+    def default(cls) -> "LearningDraftRule":
+        return cls()
+
+    def with_overrides(self, **overrides: Any) -> "LearningDraftRule":
+        data = self.model_dump() if hasattr(self, "model_dump") else self.dict()
+        data.update(overrides)
+        return type(self)(**data)
