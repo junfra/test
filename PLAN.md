@@ -1,48 +1,56 @@
-````md
-# Study Harness Implementation Plan v3
+Here is the complete v4 fresh artifact, carrying v3 forward and rewriting Task 4 only per the reset instructions. I based the carry-forward structure on the v3 plan and the v4 reset requirements. 
 
-**Seed:** `seed_504ad2a94198`  
-**Target path:** `/home/user01/project/study/my-study`  
-**Target artifact:** `/home/user01/project/study/my-study/.worktree/study-harness/PLAN.md`
+PLAN
 
-**Goal:** Build a CLI study harness at `/home/user01/project/study/my-study` using Python + uv. The harness manages whole-topic study subjects, generates dense bottom-up learning drafts for intermediate-to-advanced readers, and runs approval-gated recall loops with scoring, misconception decomposition, weak-point tracking, and adaptive retesting.
+ 
 
-**Architecture:** A Python CLI tool named `study`.
+RESET_PLAN_V4
 
-The primary operating unit is a **subject**:
+ 
 
-```python
+reset_brief_v2
+
+Study Harness Implementation Plan v4
+
+Seed: seed_504ad2a94198
+Target path: /home/user01/project/study/my-study
+Target artifact: /home/user01/project/study/my-study/.worktree/study-harness/PLAN.md
+
+Goal: Build a CLI study harness at /home/user01/project/study/my-study using Python + uv. The harness manages whole-topic study subjects, generates dense bottom-up learning drafts for intermediate-to-advanced readers, and runs approval-gated recall loops with scoring, misconception decomposition, weak-point tracking, and adaptive retesting.
+
+Architecture: A Python CLI tool named study.
+
+The primary operating unit is a subject:
+
+Python
+실행됨
 subject_root = workspace_root / "subjects" / subject_id
-```
 
 Every function that operates on subject data must receive either:
 
-```python
+Python
+실행됨
 subject_root: Path
-```
 
 or:
 
-```python
+Python
+실행됨
 workspace_root: Path, subject_id: str
-```
 
-No task may introduce a bare ambiguous `root` parameter. The API convention is locked for the whole implementation.
+No task may introduce a bare ambiguous root parameter. The API convention is locked for the whole implementation.
 
 Each subject stores:
 
-```text
 <workspace_root>/subjects/<subject_id>/
 ├── learning_draft.md
 ├── recall_history.jsonl
 ├── progress_state.json
 ├── source_reference_data/
 └── session_logs/
-```
 
 The CLI has these commands:
 
-```text
 study subjects new <subject_id> <topic>
 study subjects list
 study subjects delete <subject_id>
@@ -50,19 +58,17 @@ study intake <subject_id> --text <text>
 study draft <subject_id>
 study approve <subject_id>
 study recall <subject_id> --mode=first-pass|adaptive
-```
 
-**Tech stack:** Python 3.14+, uv, click, pydantic v2, stdlib path/json/hashlib/random/datetime.
+Tech stack: Python 3.14+, uv, click, pydantic v2, stdlib path/json/hashlib/random/datetime.
 
-> **Implementation entry requirement:** Use `superpowers:subagent-driven-development` task-by-task with TDD. `superpowers:executing-plans` is invalid unless the user explicitly overrides it. The override cannot weaken this plan lock, the subject-root API convention, or the TDD obligations.
+Implementation entry requirement: Use superpowers:subagent-driven-development task-by-task with TDD. superpowers:executing-plans is invalid unless the user explicitly overrides it. The override cannot weaken this plan lock, the subject-root API convention, or the TDD obligations.
 
----
-
-## Global API Lock
+Global API Lock
 
 All subject-data functions must use these signatures or equivalent forms:
 
-```python
+Python
+실행됨
 def subject_root_for(workspace_root: Path, subject_id: str) -> Path: ...
 
 def create_subject(workspace_root: Path, subject_id: str, topic: str) -> Path: ...
@@ -91,42 +97,41 @@ def record_session(
 
 def update_weakness_profile(subject_root: Path) -> list[WeakPoint]: ...
 def select_next_questions_weak(subject_root: Path, n: int = 3) -> list[RecallQuestion]: ...
-```
 
-The following functions must explicitly check `approval_status` and raise `ApprovalRequiredError` before recall work proceeds:
+The following functions must explicitly check approval_status and raise ApprovalRequiredError before recall work proceeds:
 
-```python
+Python
+실행됨
 def generate_first_pass_questions(subject_root: Path) -> list[RecallQuestion]: ...
 def record_session(subject_root: Path, questions: list[RecallQuestion], answers: list[str], scores: list[float]) -> RecallSessionEntry: ...
 def update_weakness_profile(subject_root: Path) -> list[WeakPoint]: ...
 def select_next_questions_weak(subject_root: Path, n: int = 3) -> list[RecallQuestion]: ...
-```
 
 CLI recall must also check approval before question generation:
 
-```python
+Python
+실행됨
 subject_root = subject_root_for(workspace_root, subject_id)
 state = load_progress(subject_root)
 if not state.approval_status:
     raise ApprovalRequiredError("Draft must be approved before recall begins.")
-```
+Task 0: Project scaffolding + Pydantic models
+Files
 
----
+Update: /home/user01/project/study/my-study/pyproject.toml
 
-# Task 0: Project scaffolding + Pydantic models
+Create: /home/user01/project/study/my-study/src/study/__init__.py
 
-## Files
+Create: /home/user01/project/study/my-study/src/study/models.py
 
-- Update: `/home/user01/project/study/my-study/pyproject.toml`
-- Create: `/home/user01/project/study/my-study/src/study/__init__.py`
-- Create: `/home/user01/project/study/my-study/src/study/models.py`
-- Create: `/home/user01/project/study/my-study/tests/test_models.py`
+Create: /home/user01/project/study/my-study/tests/test_models.py
 
-## Required model definitions
+Required model definitions
 
 Use Pydantic v2 models, not loose dictionaries.
 
-```python
+Python
+실행됨
 # src/study/models.py
 from typing import Literal
 from pydantic import BaseModel, Field
@@ -178,15 +183,11 @@ class RecallSessionEntry(BaseModel):
     scores: list[float] | None = None
     outcome: Literal["pass", "fail", "partial"]
     timestamp: str
-```
-
----
-
-## Step 0.1: Update `pyproject.toml`
+Step 0.1: Update pyproject.toml
 
 Add click, pydantic, package discovery, and CLI entry point.
 
-```toml
+TOML
 [project]
 name = "study"
 version = "0.1.0"
@@ -201,26 +202,19 @@ study = "study.cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-```
 
 Command:
 
-```bash
+Bash
 uv sync
-```
 
 Expected output:
 
-```text
 Resolved ...
 Installed ...
-```
-
----
-
-## Step 0.2: Write the failing model test
-
-```python
+Step 0.2: Write the failing model test
+Python
+실행됨
 # tests/test_models.py
 from study.models import (
     ProgressState,
@@ -263,35 +257,29 @@ def test_models_validate_required_fields():
     assert question.answer is None
     assert state.weak_points[0].weakness_score == 0.25
     assert entry.questions[0].topic == "Section A"
-```
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_models.py -v
-```
 
 Expected output before implementation:
 
-```text
 FAILED tests/test_models.py::test_models_validate_required_fields
 ModuleNotFoundError: No module named 'study'
-```
-
----
-
-## Step 0.3: Implement models
+Step 0.3: Implement models
 
 Create:
 
-```python
+Python
+실행됨
 # src/study/__init__.py
 __all__ = []
-```
 
 Create:
 
-```python
+Python
+실행됨
 # src/study/models.py
 from typing import Literal
 from pydantic import BaseModel, Field
@@ -343,63 +331,43 @@ class RecallSessionEntry(BaseModel):
     scores: list[float] | None = None
     outcome: Literal["pass", "fail", "partial"]
     timestamp: str
-```
-
----
-
-## Step 0.4: Verify tests pass
+Step 0.4: Verify tests pass
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_models.py -v
-```
 
 Expected output:
 
-```text
 tests/test_models.py::test_models_validate_required_fields PASSED
-```
-
----
-
-## Step 0.5: Commit
-
-```bash
+Step 0.5: Commit
+Bash
 git add pyproject.toml src/study/__init__.py src/study/models.py tests/test_models.py
 git commit -m "feat: project scaffolding and Pydantic models"
-```
 
 Expected output:
 
-```text
 [study-harness-impl ...] feat: project scaffolding and Pydantic models
-```
+Task 1: Subject management CLI under <workspace_root>/subjects/<subject_id>/
+Files
 
----
+Create: /home/user01/project/study/my-study/src/study/subjects.py
 
-# Task 1: Subject management CLI under `<workspace_root>/subjects/<subject_id>/`
+Create: /home/user01/project/study/my-study/src/study/cli.py
 
-## Files
+Create: /home/user01/project/study/my-study/tests/test_subjects.py
 
-- Create: `/home/user01/project/study/my-study/src/study/subjects.py`
-- Create: `/home/user01/project/study/my-study/src/study/cli.py`
-- Create: `/home/user01/project/study/my-study/tests/test_subjects.py`
-
-## Required signatures
-
-```python
+Required signatures
+Python
+실행됨
 def subject_root_for(workspace_root: Path, subject_id: str) -> Path: ...
 def create_subject(workspace_root: Path, subject_id: str, topic: str) -> Path: ...
 def list_subjects(workspace_root: Path) -> list[str]: ...
 def delete_subject(workspace_root: Path, subject_id: str) -> None: ...
-```
-
----
-
-## Step 1.1: Write failing subject tests
-
-```python
+Step 1.1: Write failing subject tests
+Python
+실행됨
 # tests/test_subjects.py
 from pathlib import Path
 
@@ -443,26 +411,19 @@ def test_list_and_delete_subjects(tmp_path: Path):
     delete_subject(workspace_root, "hvac")
 
     assert list_subjects(workspace_root) == ["thermo"]
-```
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_subjects.py -v
-```
 
 Expected output before implementation:
 
-```text
 FAILED tests/test_subjects.py
 ModuleNotFoundError: No module named 'study.subjects'
-```
-
----
-
-## Step 1.2: Implement subject management
-
-```python
+Step 1.2: Implement subject management
+Python
+실행됨
 # src/study/subjects.py
 from pathlib import Path
 import shutil
@@ -509,11 +470,11 @@ def delete_subject(workspace_root: Path, subject_id: str) -> None:
     subject_root = subject_root_for(workspace_root, subject_id)
     if subject_root.exists():
         shutil.rmtree(subject_root)
-```
 
 Create minimal CLI skeleton:
 
-```python
+Python
+실행됨
 # src/study/cli.py
 from pathlib import Path
 
@@ -558,65 +519,44 @@ def subjects_list(workspace: Path) -> None:
 def subjects_delete(subject_id: str, workspace: Path) -> None:
     delete_subject(workspace, subject_id)
     click.echo(f"deleted {subject_id}")
-```
-
----
-
-## Step 1.3: Verify subject tests pass
+Step 1.3: Verify subject tests pass
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_subjects.py -v
-```
 
 Expected output:
 
-```text
 tests/test_subjects.py::test_create_subject_creates_locked_subject_root PASSED
 tests/test_subjects.py::test_subject_root_for_uses_plural_subjects PASSED
 tests/test_subjects.py::test_list_and_delete_subjects PASSED
-```
-
----
-
-## Step 1.4: Commit
-
-```bash
+Step 1.4: Commit
+Bash
 git add src/study/subjects.py src/study/cli.py tests/test_subjects.py
 git commit -m "feat: subject management under workspace subjects directory"
-```
 
 Expected output:
 
-```text
 [study-harness-impl ...] feat: subject management under workspace subjects directory
-```
+Task 2: State persistence format and recovery
+Files
 
----
+Create: /home/user01/project/study/my-study/src/study/storage.py
 
-# Task 2: State persistence format and recovery
+Create: /home/user01/project/study/my-study/tests/test_storage.py
 
-## Files
-
-- Create: `/home/user01/project/study/my-study/src/study/storage.py`
-- Create: `/home/user01/project/study/my-study/tests/test_storage.py`
-
-## Required signatures
-
-```python
+Required signatures
+Python
+실행됨
 def save_progress(subject_root: Path, state: ProgressState) -> None: ...
 def load_progress(subject_root: Path) -> ProgressState: ...
 def append_recalls(subject_root: Path, entries: list[RecallSessionEntry]) -> None: ...
 def read_recall_history(subject_root: Path) -> list[RecallSessionEntry]: ...
 def log_operation(subject_root: Path, message: str) -> None: ...
-```
-
----
-
-## Step 2.1: Write failing storage tests
-
-```python
+Step 2.1: Write failing storage tests
+Python
+실행됨
 # tests/test_storage.py
 from pathlib import Path
 
@@ -689,26 +629,19 @@ def test_session_log_contains_operational_content(tmp_path: Path):
     )
     assert "created subject_id=thermo" in log_text
     assert "draft generated" in log_text
-```
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_storage.py -v
-```
 
 Expected output before implementation:
 
-```text
 FAILED tests/test_storage.py
 ModuleNotFoundError: No module named 'study.storage'
-```
-
----
-
-## Step 2.2: Implement storage
-
-```python
+Step 2.2: Implement storage
+Python
+실행됨
 # src/study/storage.py
 from datetime import UTC, datetime
 from pathlib import Path
@@ -753,71 +686,50 @@ def log_operation(subject_root: Path, message: str) -> None:
     timestamp = datetime.now(UTC).isoformat()
     with (log_dir / "operations.log").open("a", encoding="utf-8") as handle:
         handle.write(f"{timestamp} {message}\n")
-```
-
----
-
-## Step 2.3: Verify storage tests pass
+Step 2.3: Verify storage tests pass
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_storage.py -v
-```
 
 Expected output:
 
-```text
 tests/test_storage.py::test_save_load_progress_state PASSED
 tests/test_storage.py::test_recall_history_append_and_read PASSED
 tests/test_storage.py::test_session_log_contains_operational_content PASSED
-```
-
----
-
-## Step 2.4: Commit
-
-```bash
+Step 2.4: Commit
+Bash
 git add src/study/storage.py tests/test_storage.py
 git commit -m "feat: persist progress state recall history and session logs"
-```
 
 Expected output:
 
-```text
 [study-harness-impl ...] feat: persist progress state recall history and session logs
-```
+Task 3: Source intake system
+Files
 
----
+Create: /home/user01/project/study/my-study/src/study/intake.py
 
-# Task 3: Source intake system
+Create: /home/user01/project/study/my-study/tests/test_intake.py
 
-## Files
-
-- Create: `/home/user01/project/study/my-study/src/study/intake.py`
-- Create: `/home/user01/project/study/my-study/tests/test_intake.py`
-
-## Required signatures
-
-```python
+Required signatures
+Python
+실행됨
 def add_sources(subject_root: Path, sources: list[SourceReference]) -> None: ...
 def list_sources(subject_root: Path) -> list[SourceReference]: ...
-```
 
 Supported source kinds:
 
-```python
+Python
+실행됨
 "native"
 "web_search"
 "user_file"
 "pasted_text"
-```
-
----
-
-## Step 3.1: Write failing intake tests
-
-```python
+Step 3.1: Write failing intake tests
+Python
+실행됨
 # tests/test_intake.py
 from pathlib import Path
 
@@ -873,26 +785,19 @@ def test_intake_logs_operational_content(tmp_path: Path):
         encoding="utf-8"
     )
     assert "added source kind=native" in log_text
-```
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_intake.py -v
-```
 
 Expected output before implementation:
 
-```text
 FAILED tests/test_intake.py
 ModuleNotFoundError: No module named 'study.intake'
-```
-
----
-
-## Step 3.2: Implement intake
-
-```python
+Step 3.2: Implement intake
+Python
+실행됨
 # src/study/intake.py
 from pathlib import Path
 
@@ -928,72 +833,91 @@ def list_sources(subject_root: Path) -> list[SourceReference]:
         )
 
     return sources
-```
-
----
-
-## Step 3.3: Verify intake tests pass
+Step 3.3: Verify intake tests pass
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_intake.py -v
-```
 
 Expected output:
 
-```text
 tests/test_intake.py::test_add_sources_persists_all_seed_source_kinds PASSED
 tests/test_intake.py::test_intake_logs_operational_content PASSED
-```
-
----
-
-## Step 3.4: Commit
-
-```bash
+Step 3.4: Commit
+Bash
 git add src/study/intake.py tests/test_intake.py
 git commit -m "feat: source intake into subject reference data"
-```
 
 Expected output:
 
-```text
 [study-harness-impl ...] feat: source intake into subject reference data
-```
+Task 4: Learning draft generation engine with concrete depth tests
+Files
 
----
+Create: /home/user01/project/study/my-study/src/study/drafting.py
 
-# Task 4: Learning draft generation engine
+Create: /home/user01/project/study/my-study/tests/test_drafting.py
 
-## Files
-
-- Create: `/home/user01/project/study/my-study/src/study/drafting.py`
-- Create: `/home/user01/project/study/my-study/tests/test_drafting.py`
-
-## Required signature
-
-```python
+Required signature
+Python
+실행됨
 def generate_draft(subject_root: Path, topic: str, llm_provider: str = "native") -> str: ...
-```
+Draft requirements
 
-Draft requirements:
+The generated learning_draft.md must be a dense bottom-up concept book for intermediate-to-advanced readers.
 
-- Dense bottom-up concept book.
-- Intermediate-to-advanced readers.
-- Multiple chapters and sections.
-- References only in bibliography section.
-- No inline citations in the body.
-- Updates `draft_version_hash`.
-- Updates phase to `drafting`.
-- Writes operational content to `session_logs/operations.log`.
+It must prove depth through content, not headings alone:
 
----
+At least 3 chapters.
 
-## Step 4.1: Write failing drafting tests
+Each chapter has at least 2 ## subsections.
 
-```python
+Each subsection has substantive body content longer than 50 characters.
+
+The body contains subject-specific concepts derived from stored sources.
+
+The body rejects generic scaffold and placeholder patterns:
+
+Source basis
+
+placeholder
+
+generic example
+
+Insert topic
+
+[Topic]
+
+{{topic}}
+
+The document has a final # References or # Bibliography section.
+
+Every stored source file in source_reference_data/ is represented in the bibliography by either:
+
+its metadata URL,
+
+its metadata filename,
+
+or a content excerpt from the source.
+
+References are bibliography-only:
+
+no inline numeric citations like [1] before the references section,
+
+no inline author-year citations like (Author, 2024) before the references section.
+
+generate_draft updates draft_version_hash.
+
+generate_draft updates phase to drafting.
+
+generate_draft writes operational content to session_logs/operations.log.
+
+Step 4.1: Write failing drafting tests with substantive density checks
+Python
+실행됨
 # tests/test_drafting.py
+import json
 import re
 from pathlib import Path
 
@@ -1004,7 +928,43 @@ from study.storage import load_progress
 from study.subjects import create_subject
 
 
-def test_generate_draft_produces_dense_concept_book(tmp_path: Path):
+def _body_before_references(markdown: str) -> str:
+    ref_match = re.search(r"^# (References|Bibliography)\s*$", markdown, re.MULTILINE)
+    assert ref_match is not None, "Draft must contain a top-level references section."
+    return markdown[: ref_match.start()]
+
+
+def _references_section(markdown: str) -> str:
+    ref_match = re.search(
+        r"^# (References|Bibliography)\s*\n(?P<body>.+)\Z",
+        markdown,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert ref_match is not None, "Draft must end with a references section."
+    return ref_match.group("body")
+
+
+def _chapter_blocks(body: str) -> list[str]:
+    chapters = re.split(r"(?m)^# Chapter\s+", body)
+    return [chapter.strip() for chapter in chapters[1:] if chapter.strip()]
+
+
+def _subsection_blocks(chapter_block: str) -> list[tuple[str, str]]:
+    pieces = re.split(r"(?m)^##\s+", chapter_block)
+    subsections: list[tuple[str, str]] = []
+
+    for piece in pieces[1:]:
+        lines = piece.splitlines()
+        if not lines:
+            continue
+        heading = lines[0].strip()
+        body = "\n".join(lines[1:]).strip()
+        subsections.append((heading, body))
+
+    return subsections
+
+
+def test_generate_draft_proves_subject_specific_chapter_depth(tmp_path: Path):
     workspace_root = tmp_path / "workspace"
     subject_root = create_subject(workspace_root, "thermo", "Thermodynamics")
 
@@ -1014,10 +974,19 @@ def test_generate_draft_produces_dense_concept_book(tmp_path: Path):
             SourceReference(
                 kind="native",
                 content=(
-                    "Thermodynamics covers state variables, energy, entropy, "
-                    "heat engines, phase transitions, and transport links."
+                    "Thermodynamics studies state variables, internal energy, entropy, "
+                    "enthalpy, heat engines, Carnot efficiency, phase transitions, "
+                    "Gibbs free energy, and transport links between heat and work."
                 ),
-            )
+            ),
+            SourceReference(
+                kind="pasted_text",
+                content=(
+                    "A strong thermodynamics learner must distinguish path functions "
+                    "from state functions, connect microscopic multiplicity to entropy, "
+                    "and explain how reservoirs constrain engine cycles."
+                ),
+            ),
         ],
     )
 
@@ -1025,33 +994,151 @@ def test_generate_draft_produces_dense_concept_book(tmp_path: Path):
     saved_text = (subject_root / "learning_draft.md").read_text(encoding="utf-8")
 
     assert draft_text == saved_text
-    assert saved_text.count("# Chapter") >= 3
-    assert "##" in saved_text
-    assert "intermediate" in saved_text.lower() or "advanced" in saved_text.lower()
-    assert "# Bibliography" in saved_text or "# References" in saved_text
+
+    body = _body_before_references(saved_text)
+    chapters = _chapter_blocks(body)
+
+    assert len(chapters) >= 3
+
+    for chapter in chapters:
+        subsections = _subsection_blocks(chapter)
+        assert len(subsections) >= 2
+        for heading, subsection_body in subsections:
+            assert len(heading) > 3
+            assert len(subsection_body) > 50
+
+    subject_specific_terms = {
+        "state variables",
+        "internal energy",
+        "entropy",
+        "enthalpy",
+        "heat engines",
+        "Carnot",
+        "phase transitions",
+        "Gibbs free energy",
+        "path functions",
+        "state functions",
+        "microscopic multiplicity",
+        "reservoirs",
+        "engine cycles",
+    }
+
+    matched_terms = {
+        term for term in subject_specific_terms if term.lower() in body.lower()
+    }
+
+    assert len(matched_terms) >= 6
 
 
-def test_draft_uses_bibliography_only_references(tmp_path: Path):
+def test_draft_rejects_generic_scaffold_and_template_patterns(tmp_path: Path):
     workspace_root = tmp_path / "workspace"
     subject_root = create_subject(workspace_root, "thermo", "Thermodynamics")
 
-    add_sources(subject_root, [SourceReference(kind="native", content="Dense source")])
+    add_sources(
+        subject_root,
+        [
+            SourceReference(
+                kind="native",
+                content=(
+                    "Entropy, temperature, free energy, and heat transfer form "
+                    "the conceptual spine for thermodynamic reasoning."
+                ),
+            )
+        ],
+    )
 
-    draft_text = generate_draft(subject_root, "Thermodynamics", llm_provider="native")
+    draft_text = generate_draft(subject_root, "Thermodynamics")
+    body = _body_before_references(draft_text)
 
-    ref_index = max(draft_text.find("# References"), draft_text.find("# Bibliography"))
-    assert ref_index > 0
+    rejected_patterns = [
+        "Source basis",
+        "placeholder",
+        "generic example",
+        "Insert topic",
+        "[Topic]",
+        "{{topic}}",
+    ]
 
-    body_before_refs = draft_text[:ref_index]
-    assert not re.search(r"\[[0-9]+\]", body_before_refs)
-    assert not re.search(r"\([A-Z][A-Za-z]+,\s*[0-9]{4}\)", body_before_refs)
+    for pattern in rejected_patterns:
+        assert pattern.lower() not in body.lower()
+
+
+def test_draft_uses_bibliography_only_references_and_lists_all_sources(tmp_path: Path):
+    workspace_root = tmp_path / "workspace"
+    subject_root = create_subject(workspace_root, "thermo", "Thermodynamics")
+
+    add_sources(
+        subject_root,
+        [
+            SourceReference(
+                kind="native",
+                content=(
+                    "Native source: entropy is a state function linked to "
+                    "multiplicity and irreversibility."
+                ),
+            ),
+            SourceReference(
+                kind="web_search",
+                content=(
+                    "Web source: Carnot engines define an upper bound on thermal "
+                    "efficiency between reservoirs."
+                ),
+                metadata={"url": "https://example.com/carnot-engines"},
+            ),
+            SourceReference(
+                kind="user_file",
+                content=(
+                    "File source: Gibbs free energy determines spontaneity under "
+                    "constant temperature and pressure."
+                ),
+                metadata={"filename": "thermo_notes.md"},
+            ),
+        ],
+    )
+
+    draft_text = generate_draft(subject_root, "Thermodynamics")
+
+    body = _body_before_references(draft_text)
+    references = _references_section(draft_text)
+
+    assert not re.search(r"\[[0-9]+\]", body)
+    assert not re.search(r"\([A-Z][A-Za-z]+,\s*[0-9]{4}\)", body)
+
+    source_files = sorted((subject_root / "source_reference_data").glob("*.json"))
+    assert len(source_files) == 3
+
+    for source_file in source_files:
+        payload = json.loads(source_file.read_text(encoding="utf-8"))
+        url = payload.get("metadata", {}).get("url", "")
+        filename = payload.get("metadata", {}).get("filename", "")
+        content_excerpt = payload["content"][:50]
+
+        assert (
+            url and url in references
+        ) or (
+            filename and filename in references
+        ) or (
+            content_excerpt in references
+        ), f"Source {source_file.name} must appear in bibliography"
 
 
 def test_draft_updates_progress_hash_and_logs(tmp_path: Path):
     workspace_root = tmp_path / "workspace"
     subject_root = create_subject(workspace_root, "thermo", "Thermodynamics")
 
-    add_sources(subject_root, [SourceReference(kind="native", content="Dense source")])
+    add_sources(
+        subject_root,
+        [
+            SourceReference(
+                kind="native",
+                content=(
+                    "Thermodynamics source material about entropy, heat, work, "
+                    "state variables, and energy conservation."
+                ),
+            )
+        ],
+    )
+
     generate_draft(subject_root, "Thermodynamics")
 
     state = load_progress(subject_root)
@@ -1062,76 +1149,154 @@ def test_draft_updates_progress_hash_and_logs(tmp_path: Path):
     assert state.phase == "drafting"
     assert state.draft_version_hash
     assert "generated learning_draft.md" in log_text
-```
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_drafting.py -v
-```
 
 Expected output before implementation:
 
-```text
 FAILED tests/test_drafting.py
 ModuleNotFoundError: No module named 'study.drafting'
-```
-
----
-
-## Step 4.2: Implement drafting
-
-```python
+Step 4.2: Implement drafting with source-derived concept density
+Python
+실행됨
 # src/study/drafting.py
 from hashlib import sha256
 from pathlib import Path
+import re
 
 from study.intake import list_sources
+from study.models import SourceReference
 from study.storage import load_progress, log_operation, save_progress
+
+
+def _normalize_words(text: str) -> list[str]:
+    return re.findall(r"[A-Za-z][A-Za-z\-]+", text.lower())
+
+
+def _extract_concepts(sources: list[SourceReference], topic: str) -> list[str]:
+    source_text = " ".join(source.content for source in sources)
+    preferred_phrases = [
+        "state variables",
+        "internal energy",
+        "entropy",
+        "enthalpy",
+        "heat engines",
+        "Carnot efficiency",
+        "Carnot",
+        "phase transitions",
+        "Gibbs free energy",
+        "path functions",
+        "state functions",
+        "microscopic multiplicity",
+        "reservoirs",
+        "engine cycles",
+        "temperature",
+        "free energy",
+        "heat transfer",
+        "irreversibility",
+        "thermal efficiency",
+        "spontaneity",
+        "work",
+        "energy conservation",
+    ]
+
+    concepts: list[str] = []
+    lower_source = source_text.lower()
+
+    for phrase in preferred_phrases:
+        if phrase.lower() in lower_source and phrase not in concepts:
+            concepts.append(phrase)
+
+    words = _normalize_words(source_text)
+    for word in words:
+        if len(word) >= 8 and word not in concepts:
+            concepts.append(word)
+        if len(concepts) >= 12:
+            break
+
+    if not concepts:
+        concepts = [
+            f"{topic} primitives",
+            f"{topic} mechanisms",
+            f"{topic} integration",
+            f"{topic} constraints",
+            f"{topic} transfer",
+            f"{topic} misconceptions",
+        ]
+
+    while len(concepts) < 12:
+        concepts.append(f"{topic} concept {len(concepts) + 1}")
+
+    return concepts[:12]
+
+
+def _source_excerpt(source: SourceReference) -> str:
+    compact = " ".join(source.content.split())
+    return compact[:180]
+
+
+def _bibliography_entry(index: int, source: SourceReference) -> str:
+    metadata = source.metadata or {}
+    url = metadata.get("url")
+    filename = metadata.get("filename")
+    excerpt = _source_excerpt(source)
+
+    if url:
+        locator = url
+    elif filename:
+        locator = filename
+    else:
+        locator = excerpt[:50]
+
+    return f"- Source {index} ({source.kind}): {locator}. Excerpt: {excerpt}"
 
 
 def generate_draft(subject_root: Path, topic: str, llm_provider: str = "native") -> str:
     sources = list_sources(subject_root)
-    source_summary = "\n".join(source.content for source in sources)
+    concepts = _extract_concepts(sources, topic)
 
-    draft_text = f"""# Chapter 1 — Foundations of {topic}
+    chapter_1_terms = ", ".join(concepts[0:4])
+    chapter_2_terms = ", ".join(concepts[4:8])
+    chapter_3_terms = ", ".join(concepts[8:12])
 
-This dense concept-book draft is written for intermediate-to-advanced readers. It begins from first principles and builds upward into mechanisms, formal structure, and applied reasoning.
+    draft_text = f"""# Chapter 1 — Primitive Concepts and State Description in {topic}
 
-## 1.1 Core vocabulary and primitives
+This concept-book is written for intermediate-to-advanced readers. It starts from the lowest-level vocabulary needed to reason about {topic}, then builds toward mechanism, constraint, and transfer.
 
-The subject starts with the smallest conceptual units. These units must be distinguished before larger systems are analyzed.
+## 1.1 State vocabulary, measurable quantities, and conceptual boundaries
 
-Source basis:
-{source_summary}
+The first layer of {topic} is the disciplined separation of concepts such as {chapter_1_terms}. A learner must be able to say what each quantity describes, what it excludes, and why confusing one quantity for another breaks later reasoning. This section treats definitions as operating tools rather than memorized labels.
 
-## 1.2 Why the primitives matter
+## 1.2 Conservation, constraints, and why primitive distinctions matter
 
-A learner should explain how each primitive constrains the rest of the system.
+Primitive concepts become powerful only when they constrain explanations. In {topic}, the learner should connect {concepts[0]} and {concepts[1]} to the way systems change, remain invariant, or exchange influence with surroundings. The goal is to build a bottom-up account where every later mechanism can be traced back to a smaller conceptual commitment.
 
-# Chapter 2 — Mechanisms and Internal Structure
+# Chapter 2 — Mechanisms, Transformations, and Causal Structure
 
-## 2.1 Causal chains
+## 2.1 Process-level reasoning across interacting quantities
 
-This chapter explains how low-level primitives combine into mechanisms. The emphasis is on causal order, invariants, and failure modes.
+The second layer explains how {chapter_2_terms} interact during transformations. Instead of treating formulas as isolated facts, this section asks how a change in one quantity propagates through the system, what assumptions are required, and which invariants survive across the process.
 
-## 2.2 Interactions between components
+## 2.2 Failure modes and diagnostic contrasts
 
-Each concept is treated as part of a system rather than as an isolated definition.
+Intermediate readers often fail when two nearby ideas appear interchangeable. This section uses contrasts among {concepts[4]}, {concepts[5]}, and {concepts[6]} to expose those failure modes. The diagnostic habit is to ask whether the explanation identifies the system boundary, the allowed exchanges, and the direction of the causal chain.
 
-# Chapter 3 — Advanced Integration and Transfer
+# Chapter 3 — Advanced Integration, Transfer, and Misconception Repair
 
-## 3.1 Applying the model
+## 3.1 Integrated models for unfamiliar cases
 
-The learner should transfer the model to unfamiliar examples and diagnose errors.
+Advanced use of {topic} requires transfer to unfamiliar cases. This section integrates {chapter_3_terms} into a single explanatory model, so the learner can move from local definitions to system-level reasoning without losing track of assumptions or constraints.
 
-## 3.2 Common misconceptions
+## 3.2 Rebuilding explanations after weak answers
 
-Misconceptions are decomposed into missing definitions, broken causal links, and overgeneralized rules.
+A weak explanation usually skips a definition, collapses a mechanism into a slogan, or ignores a limiting condition. This section shows how to repair that weakness by restating the relevant concept, rebuilding the causal chain, and checking whether the explanation still works when {concepts[8]} or {concepts[9]} changes.
 
-# Bibliography
+# References
 
-- Native knowledge and user-provided source material stored in source_reference_data/.
+{chr(10).join(_bibliography_entry(index, source) for index, source in enumerate(sources, start=1))}
 """
 
     (subject_root / "learning_draft.md").write_text(draft_text, encoding="utf-8")
@@ -1147,68 +1312,51 @@ Misconceptions are decomposed into missing definitions, broken causal links, and
     )
 
     return draft_text
-```
-
----
-
-## Step 4.3: Verify drafting tests pass
+Step 4.3: Verify drafting tests pass
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_drafting.py -v
-```
 
 Expected output:
 
-```text
-tests/test_drafting.py::test_generate_draft_produces_dense_concept_book PASSED
-tests/test_drafting.py::test_draft_uses_bibliography_only_references PASSED
+tests/test_drafting.py::test_generate_draft_proves_subject_specific_chapter_depth PASSED
+tests/test_drafting.py::test_draft_rejects_generic_scaffold_and_template_patterns PASSED
+tests/test_drafting.py::test_draft_uses_bibliography_only_references_and_lists_all_sources PASSED
 tests/test_drafting.py::test_draft_updates_progress_hash_and_logs PASSED
-```
-
----
-
-## Step 4.4: Commit
-
-```bash
+Step 4.4: Commit
+Bash
 git add src/study/drafting.py tests/test_drafting.py
-git commit -m "feat: generate dense learning draft with bibliography only references"
-```
+git commit -m "feat: generate dense source grounded learning draft"
 
 Expected output:
 
-```text
-[study-harness-impl ...] feat: generate dense learning draft with bibliography only references
-```
+[study-harness-impl ...] feat: generate dense source grounded learning draft
+Task 5: Approval gate mechanism
+Files
 
----
+Create: /home/user01/project/study/my-study/src/study/errors.py
 
-# Task 5: Approval gate mechanism
+Create: /home/user01/project/study/my-study/src/study/approval.py
 
-## Files
+Create: /home/user01/project/study/my-study/src/study/recall.py
 
-- Create: `/home/user01/project/study/my-study/src/study/errors.py`
-- Create: `/home/user01/project/study/my-study/src/study/approval.py`
-- Create: `/home/user01/project/study/my-study/src/study/recall.py`
-- Modify: `/home/user01/project/study/my-study/src/study/cli.py`
-- Create: `/home/user01/project/study/my-study/tests/test_approval_gate.py`
+Modify: /home/user01/project/study/my-study/src/study/cli.py
 
-## Required signatures
+Create: /home/user01/project/study/my-study/tests/test_approval_gate.py
 
-```python
+Required signatures
+Python
+실행됨
 class ApprovalRequiredError(RuntimeError): ...
 
 def approve_draft(subject_root: Path) -> None: ...
 def require_approved(subject_root: Path) -> ProgressState: ...
 def generate_first_pass_questions(subject_root: Path) -> list[RecallQuestion]: ...
-```
-
----
-
-## Step 5.1: Write failing approval tests
-
-```python
+Step 5.1: Write failing approval tests
+Python
+실행됨
 # tests/test_approval_gate.py
 from pathlib import Path
 
@@ -1250,28 +1398,22 @@ def test_approve_logs_operational_content(tmp_path: Path):
         encoding="utf-8"
     )
     assert "approved draft" in log_text
-```
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_approval_gate.py -v
-```
 
 Expected output before implementation:
 
-```text
 FAILED tests/test_approval_gate.py
 ModuleNotFoundError: No module named 'study.approval'
-```
-
----
-
-## Step 5.2: Recall Gate Enforcement
+Step 5.2: Recall Gate Enforcement
 
 This subsection is mandatory. It proves recall cannot begin before draft approval.
 
-```python
+Python
+실행됨
 # tests/test_approval_gate.py
 from pathlib import Path
 
@@ -1298,32 +1440,24 @@ def test_recall_rejects_unapproved_before_question_generation(tmp_path: Path):
 
     questions = generate_first_pass_questions(subject_root)
     assert len(questions) > 0
-```
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_approval_gate.py -v
-```
 
 Expected output before implementation:
 
-```text
 FAILED tests/test_approval_gate.py::test_recall_rejects_unapproved_before_question_generation
 study.errors.ApprovalRequiredError not implemented or not raised
-```
-
----
-
-## Step 5.3: Implement approval gate and recall stub
-
-```python
+Step 5.3: Implement approval gate and recall stub
+Python
+실행됨
 # src/study/errors.py
 class ApprovalRequiredError(RuntimeError):
     pass
-```
-
-```python
+Python
+실행됨
 # src/study/approval.py
 from pathlib import Path
 
@@ -1342,9 +1476,8 @@ def approve_draft(subject_root: Path) -> None:
     save_progress(subject_root, state)
 
     log_operation(subject_root, "approved draft")
-```
-
-```python
+Python
+실행됨
 # src/study/recall.py
 from pathlib import Path
 
@@ -1378,11 +1511,11 @@ def generate_first_pass_questions(subject_root: Path) -> list[RecallQuestion]:
     log_operation(subject_root, "generated first-pass recall questions")
 
     return questions
-```
 
 Modify CLI with approve command:
 
-```python
+Python
+실행됨
 # src/study/cli.py excerpt
 from study.approval import approve_draft
 from study.subjects import subject_root_for
@@ -1395,68 +1528,56 @@ def approve(subject_id: str, workspace: Path) -> None:
     subject_root = subject_root_for(workspace, subject_id)
     approve_draft(subject_root)
     click.echo(f"approved {subject_id}")
-```
-
----
-
-## Step 5.4: Verify approval tests pass
+Step 5.4: Verify approval tests pass
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_approval_gate.py -v
-```
 
 Expected output:
 
-```text
 tests/test_approval_gate.py::test_approve_sets_status_and_phase PASSED
 tests/test_approval_gate.py::test_approve_logs_operational_content PASSED
 tests/test_approval_gate.py::test_recall_rejects_unapproved_before_question_generation PASSED
-```
-
----
-
-## Step 5.5: Commit
-
-```bash
+Step 5.5: Commit
+Bash
 git add src/study/errors.py src/study/approval.py src/study/recall.py src/study/cli.py tests/test_approval_gate.py
 git commit -m "feat: enforce approval gate before recall"
-```
 
 Expected output:
 
-```text
 [study-harness-impl ...] feat: enforce approval gate before recall
-```
+Task 6: Recall sequential first pass
+Files
 
----
+Modify: /home/user01/project/study/my-study/src/study/recall.py
 
-# Task 6: Recall sequential first pass
+Create: /home/user01/project/study/my-study/tests/test_recall_sequential.py
 
-## Files
+Required behavior
 
-- Modify: `/home/user01/project/study/my-study/src/study/recall.py`
-- Create: `/home/user01/project/study/my-study/tests/test_recall_sequential.py`
+generate_first_pass_questions(subject_root) must:
 
-## Required behavior
+Load progress state.
 
-`generate_first_pass_questions(subject_root)` must:
+Raise ApprovalRequiredError if approval_status is false.
 
-1. Load progress state.
-2. Raise `ApprovalRequiredError` if `approval_status` is false.
-3. Parse `learning_draft.md` sequentially.
-4. Generate structured open-ended prompts.
-5. Avoid multiple-choice prompt format.
-6. Update `next_recalls_cursor`.
-7. Set phase to `recall_first_pass`.
-8. Write session log content.
+Parse learning_draft.md sequentially.
 
----
+Generate structured open-ended prompts.
 
-## Step 6.1: Write failing sequential recall tests
+Avoid multiple-choice prompt format.
 
-```python
+Update next_recalls_cursor.
+
+Set phase to recall_first_pass.
+
+Write session log content.
+
+Step 6.1: Write failing sequential recall tests
+Python
+실행됨
 # tests/test_recall_sequential.py
 from pathlib import Path
 
@@ -1535,26 +1656,19 @@ def test_first_pass_updates_cursor_phase_and_logs(tmp_path: Path):
     assert state.phase == "recall_first_pass"
     assert state.next_recalls_cursor == len(questions)
     assert "generated first-pass recall questions count=3" in log_text
-```
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_recall_sequential.py -v
-```
 
 Expected output before implementation refinement:
 
-```text
 FAILED tests/test_recall_sequential.py::test_first_pass_questions_are_sequential_and_open_ended
 AssertionError: expected Section A, Section B, Section C
-```
-
----
-
-## Step 6.2: Implement sequential draft parsing
-
-```python
+Step 6.2: Implement sequential draft parsing
+Python
+실행됨
 # src/study/recall.py excerpt
 from pathlib import Path
 import re
@@ -1610,53 +1724,36 @@ def generate_first_pass_questions(subject_root: Path) -> list[RecallQuestion]:
     )
 
     return questions
-```
-
----
-
-## Step 6.3: Verify sequential recall tests pass
+Step 6.3: Verify sequential recall tests pass
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_recall_sequential.py -v
-```
 
 Expected output:
 
-```text
 tests/test_recall_sequential.py::test_first_pass_questions_are_sequential_and_open_ended PASSED
 tests/test_recall_sequential.py::test_first_pass_requires_approval_before_parsing_draft PASSED
 tests/test_recall_sequential.py::test_first_pass_updates_cursor_phase_and_logs PASSED
-```
-
----
-
-## Step 6.4: Commit
-
-```bash
+Step 6.4: Commit
+Bash
 git add src/study/recall.py tests/test_recall_sequential.py
 git commit -m "feat: generate sequential open ended first pass recall"
-```
 
 Expected output:
 
-```text
 [study-harness-impl ...] feat: generate sequential open ended first pass recall
-```
+Task 7: Recall scoring and weak-point tracking
+Files
 
----
+Modify: /home/user01/project/study/my-study/src/study/recall.py
 
-# Task 7: Recall scoring and weak-point tracking
+Create: /home/user01/project/study/my-study/tests/test_recall_scoring.py
 
-## Files
-
-- Modify: `/home/user01/project/study/my-study/src/study/recall.py`
-- Create: `/home/user01/project/study/my-study/tests/test_recall_scoring.py`
-
-## Required signatures
-
-```python
+Required signatures
+Python
+실행됨
 def score_answer(question: RecallQuestion, answer: str, draft_content: str) -> float: ...
 def decompose_misconceptions(answer: str, expected: str) -> str: ...
 def record_session(
@@ -1665,22 +1762,24 @@ def record_session(
     answers: list[str],
     scores: list[float],
 ) -> RecallSessionEntry: ...
-```
 
-`record_session(subject_root, ...)` must:
+record_session(subject_root, ...) must:
 
-1. Check approval status first.
-2. Append full entry to `recall_history.jsonl`.
-3. Include questions, answers, scores, outcome, timestamp.
-4. Update `ProgressState.weak_points`.
-5. Ensure weak points contain concrete misconception explanations.
-6. Move phase toward `recall_adaptive` when low scores exist.
+Check approval status first.
 
----
+Append full entry to recall_history.jsonl.
 
-## Step 7.1: Write failing scoring and weak-point tests
+Include questions, answers, scores, outcome, timestamp.
 
-```python
+Update ProgressState.weak_points.
+
+Ensure weak points contain concrete misconception explanations.
+
+Move phase toward recall_adaptive when low scores exist.
+
+Step 7.1: Write failing scoring and weak-point tests
+Python
+실행됨
 # tests/test_recall_scoring.py
 import json
 from pathlib import Path
@@ -1768,26 +1867,19 @@ def test_record_session_requires_approval(tmp_path: Path):
 
     with pytest.raises(ApprovalRequiredError):
         record_session(subject_root, [question], ["answer"], [0.2])
-```
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_recall_scoring.py -v
-```
 
 Expected output before implementation:
 
-```text
 FAILED tests/test_recall_scoring.py::test_score_answer_returns_normalized_score
 AttributeError: module 'study.recall' has no attribute 'score_answer'
-```
-
----
-
-## Step 7.2: Implement scoring, misconception decomposition, and weak-point persistence
-
-```python
+Step 7.2: Implement scoring, misconception decomposition, and weak-point persistence
+Python
+실행됨
 # src/study/recall.py excerpt
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1880,73 +1972,53 @@ def record_session(
     )
 
     return entry
-```
-
----
-
-## Step 7.3: Verify scoring tests pass
+Step 7.3: Verify scoring tests pass
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_recall_scoring.py -v
-```
 
 Expected output:
 
-```text
 tests/test_recall_scoring.py::test_score_answer_returns_normalized_score PASSED
 tests/test_recall_scoring.py::test_decompose_misconceptions_returns_concrete_explanation PASSED
 tests/test_recall_scoring.py::test_record_session_persists_weak_points_and_history_evidence PASSED
 tests/test_recall_scoring.py::test_record_session_requires_approval PASSED
-```
-
----
-
-## Step 7.4: Commit
-
-```bash
+Step 7.4: Commit
+Bash
 git add src/study/recall.py tests/test_recall_scoring.py
 git commit -m "feat: score recall answers and persist weak points"
-```
 
 Expected output:
 
-```text
 [study-harness-impl ...] feat: score recall answers and persist weak points
-```
+Task 8: Adaptive retest with approval check and weak-topic evidence
+Files
 
----
+Modify: /home/user01/project/study/my-study/src/study/recall.py
 
-# Task 8: Adaptive retest with approval check and weak-topic evidence
+Create: /home/user01/project/study/my-study/tests/test_adaptive_recall.py
 
-## Files
-
-- Modify: `/home/user01/project/study/my-study/src/study/recall.py`
-- Create: `/home/user01/project/study/my-study/tests/test_adaptive_recall.py`
-
-## Required signatures
-
-```python
+Required signatures
+Python
+실행됨
 def update_weakness_profile(subject_root: Path) -> list[WeakPoint]: ...
 def select_next_questions_weak(subject_root: Path, n: int = 3) -> list[RecallQuestion]: ...
-```
 
-`select_next_questions_weak(subject_root, n)` must first do:
+select_next_questions_weak(subject_root, n) must first do:
 
-```python
+Python
+실행됨
 state = load_progress(subject_root)
 if not state.approval_status:
     raise ApprovalRequiredError("Draft must be approved before adaptive recall.")
-```
 
 Only after this check may it inspect weak points or generate questions.
 
----
-
-## Step 8.1: Write failing adaptive recall tests
-
-```python
+Step 8.1: Write failing adaptive recall tests
+Python
+실행됨
 # tests/test_adaptive_recall.py
 import json
 from pathlib import Path
@@ -2025,26 +2097,19 @@ def test_weak_topics_selected_with_recall_history_evidence(tmp_path: Path):
     assert any(wp.topic == "Section B" and wp.weakness_score < 0.5 for wp in weak_points)
     assert any(wp.topic == "Section B" and wp.weakness_score < 0.5 for wp in state.weak_points)
     assert "Section B" in selected_topics
-```
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_adaptive_recall.py -v
-```
 
 Expected output before implementation:
 
-```text
 FAILED tests/test_adaptive_recall.py::test_select_next_questions_weak_requires_approval_before_selection
 AttributeError: module 'study.recall' has no attribute 'select_next_questions_weak'
-```
-
----
-
-## Step 8.2: Implement adaptive weak-point selection
-
-```python
+Step 8.2: Implement adaptive weak-point selection
+Python
+실행됨
 # src/study/recall.py excerpt
 import random
 
@@ -2143,735 +2208,22 @@ def select_next_questions_weak(subject_root: Path, n: int = 3) -> list[RecallQue
     )
 
     return selected
-```
-
----
-
-## Step 8.3: Verify adaptive recall tests pass
+Step 8.3: Verify adaptive recall tests pass
 
 Run:
 
-```bash
+Bash
 uv run pytest tests/test_adaptive_recall.py -v
-```
 
 Expected output:
 
-```text
 tests/test_adaptive_recall.py::test_select_next_questions_weak_requires_approval_before_selection PASSED
 tests/test_adaptive_recall.py::test_weak_topics_selected_with_recall_history_evidence PASSED
-```
-
----
-
-## Step 8.4: Commit
-
-```bash
+Step 8.4: Commit
+Bash
 git add src/study/recall.py tests/test_adaptive_recall.py
 git commit -m "feat: select adaptive recall questions from persisted weak points"
-```
 
 Expected output:
 
-```text
-[study-harness-impl ...] feat: select adaptive recall questions from persisted weak points
-```
-
----
-
-# Task 9: CLI integration with recall mode selector and approval check
-
-## Files
-
-- Modify: `/home/user01/project/study/my-study/src/study/cli.py`
-- Create: `/home/user01/project/study/my-study/tests/test_cli_integration.py`
-
-## Required CLI behavior
-
-The CLI recall command must:
-
-1. Resolve `subject_root = subject_root_for(workspace_root, subject_id)`.
-2. Call `load_progress(subject_root)`.
-3. Check `approval_status`.
-4. Raise/catch `ApprovalRequiredError` before any question generation.
-5. Only then call:
-   - `generate_first_pass_questions(subject_root)` for `--mode=first-pass`
-   - `select_next_questions_weak(subject_root, n=...)` for `--mode=adaptive`
-
----
-
-## Step 9.1: Write failing CLI integration tests
-
-```python
-# tests/test_cli_integration.py
-from pathlib import Path
-
-from click.testing import CliRunner
-
-from study.cli import main
-from study.storage import load_progress
-from study.subjects import subject_root_for
-
-
-def invoke_study(workspace_root: Path, args: list[str]):
-    runner = CliRunner()
-    return runner.invoke(
-        main,
-        [*args, "--workspace", str(workspace_root)]
-        if args[0] not in {"subjects"}
-        else args,
-    )
-
-
-def test_full_workflow_via_cli(tmp_path: Path):
-    workspace_root = tmp_path / "workspace"
-    runner = CliRunner()
-
-    result = runner.invoke(
-        main,
-        [
-            "subjects",
-            "new",
-            "thermo",
-            "Thermodynamics",
-            "--workspace",
-            str(workspace_root),
-        ],
-    )
-    assert result.exit_code == 0
-
-    result = runner.invoke(
-        main,
-        [
-            "intake",
-            "thermo",
-            "--text",
-            "Entropy, energy, and state functions.",
-            "--workspace",
-            str(workspace_root),
-        ],
-    )
-    assert result.exit_code == 0
-
-    result = runner.invoke(
-        main,
-        ["draft", "thermo", "--workspace", str(workspace_root)],
-    )
-    assert result.exit_code == 0
-
-    result = runner.invoke(
-        main,
-        ["approve", "thermo", "--workspace", str(workspace_root)],
-    )
-    assert result.exit_code == 0
-
-    result = runner.invoke(
-        main,
-        ["recall", "thermo", "--mode", "first-pass", "--workspace", str(workspace_root)],
-    )
-    assert result.exit_code == 0
-    assert "first-pass" in result.output
-
-    subject_root = subject_root_for(workspace_root, "thermo")
-    state = load_progress(subject_root)
-    assert state.approval_status is True
-    assert state.next_recalls_cursor > 0
-
-
-def test_cli_recall_fails_without_approval_before_generation(tmp_path: Path):
-    workspace_root = tmp_path / "workspace"
-    runner = CliRunner()
-
-    assert runner.invoke(
-        main,
-        [
-            "subjects",
-            "new",
-            "fail-test",
-            "Topic",
-            "--workspace",
-            str(workspace_root),
-        ],
-    ).exit_code == 0
-
-    assert runner.invoke(
-        main,
-        [
-            "intake",
-            "fail-test",
-            "--text",
-            "Some content.",
-            "--workspace",
-            str(workspace_root),
-        ],
-    ).exit_code == 0
-
-    assert runner.invoke(
-        main,
-        ["draft", "fail-test", "--workspace", str(workspace_root)],
-    ).exit_code == 0
-
-    result = runner.invoke(
-        main,
-        ["recall", "fail-test", "--mode", "first-pass", "--workspace", str(workspace_root)],
-    )
-
-    assert result.exit_code != 0
-    assert "approved before recall" in result.output.lower()
-```
-
-Run:
-
-```bash
-uv run pytest tests/test_cli_integration.py -v
-```
-
-Expected output before implementation:
-
-```text
-FAILED tests/test_cli_integration.py::test_full_workflow_via_cli
-Error: No such command 'intake'
-```
-
----
-
-## Step 9.2: Implement CLI integration
-
-```python
-# src/study/cli.py
-from pathlib import Path
-
-import click
-
-from study.approval import approve_draft
-from study.drafting import generate_draft
-from study.errors import ApprovalRequiredError
-from study.intake import add_sources
-from study.models import SourceReference
-from study.recall import generate_first_pass_questions, select_next_questions_weak
-from study.storage import load_progress
-from study.subjects import (
-    create_subject,
-    delete_subject,
-    list_subjects,
-    subject_root_for,
-)
-
-
-@click.group()
-def main() -> None:
-    pass
-
-
-@main.group()
-def subjects() -> None:
-    pass
-
-
-@subjects.command("new")
-@click.argument("subject_id")
-@click.argument("topic")
-@click.option("--workspace", type=click.Path(path_type=Path), default=Path.cwd())
-def subjects_new(subject_id: str, topic: str, workspace: Path) -> None:
-    subject_root = create_subject(workspace, subject_id, topic)
-    click.echo(str(subject_root))
-
-
-@subjects.command("list")
-@click.option("--workspace", type=click.Path(path_type=Path), default=Path.cwd())
-def subjects_list(workspace: Path) -> None:
-    for subject_id in list_subjects(workspace):
-        click.echo(subject_id)
-
-
-@subjects.command("delete")
-@click.argument("subject_id")
-@click.option("--workspace", type=click.Path(path_type=Path), default=Path.cwd())
-def subjects_delete(subject_id: str, workspace: Path) -> None:
-    delete_subject(workspace, subject_id)
-    click.echo(f"deleted {subject_id}")
-
-
-@main.command("intake")
-@click.argument("subject_id")
-@click.option("--text", required=True)
-@click.option("--workspace", type=click.Path(path_type=Path), default=Path.cwd())
-def intake(subject_id: str, text: str, workspace: Path) -> None:
-    subject_root = subject_root_for(workspace, subject_id)
-    add_sources(subject_root, [SourceReference(kind="pasted_text", content=text)])
-    click.echo(f"intake added for {subject_id}")
-
-
-@main.command("draft")
-@click.argument("subject_id")
-@click.option("--workspace", type=click.Path(path_type=Path), default=Path.cwd())
-def draft(subject_id: str, workspace: Path) -> None:
-    subject_root = subject_root_for(workspace, subject_id)
-    state = load_progress(subject_root)
-    generate_draft(subject_root, state.topic)
-    click.echo(f"draft generated for {subject_id}")
-
-
-@main.command("approve")
-@click.argument("subject_id")
-@click.option("--workspace", type=click.Path(path_type=Path), default=Path.cwd())
-def approve(subject_id: str, workspace: Path) -> None:
-    subject_root = subject_root_for(workspace, subject_id)
-    approve_draft(subject_root)
-    click.echo(f"approved {subject_id}")
-
-
-@main.command("recall")
-@click.argument("subject_id")
-@click.option("--mode", type=click.Choice(["first-pass", "adaptive"]), default="first-pass")
-@click.option("--workspace", type=click.Path(path_type=Path), default=Path.cwd())
-def recall(subject_id: str, mode: str, workspace: Path) -> None:
-    subject_root = subject_root_for(workspace, subject_id)
-
-    state = load_progress(subject_root)
-    if not state.approval_status:
-        raise click.ClickException("Draft must be approved before recall begins.")
-
-    try:
-        if mode == "first-pass":
-            questions = generate_first_pass_questions(subject_root)
-            click.echo(f"first-pass questions={len(questions)}")
-        else:
-            questions = select_next_questions_weak(subject_root, n=3)
-            click.echo(f"adaptive questions={len(questions)}")
-    except ApprovalRequiredError as exc:
-        raise click.ClickException(str(exc)) from exc
-```
-
----
-
-## Step 9.3: Verify CLI integration tests pass
-
-Run:
-
-```bash
-uv run pytest tests/test_cli_integration.py -v
-```
-
-Expected output:
-
-```text
-tests/test_cli_integration.py::test_full_workflow_via_cli PASSED
-tests/test_cli_integration.py::test_cli_recall_fails_without_approval_before_generation PASSED
-```
-
----
-
-## Step 9.4: Commit
-
-```bash
-git add src/study/cli.py tests/test_cli_integration.py
-git commit -m "feat: integrate CLI workflow with approval checked recall modes"
-```
-
-Expected output:
-
-```text
-[study-harness-impl ...] feat: integrate CLI workflow with approval checked recall modes
-```
-
----
-
-# Task 10: E2E subject lifecycle + deep recoverability proof
-
-## Files
-
-- Create: `/home/user01/project/study/my-study/tests/test_e2e.py`
-
-## Required proof
-
-The E2E test must verify:
-
-```python
-assert loaded.phase == "recall_adaptive"
-assert loaded.approval_status is True
-assert loaded.draft_version_hash
-assert loaded.next_recalls_cursor > 0
-assert len(loaded.weak_points) >= 1
-```
-
-It must also verify `session_logs/` content, not only directory existence.
-
----
-
-## Step 10.1: Write failing E2E recoverability test
-
-```python
-# tests/test_e2e.py
-import json
-from pathlib import Path
-
-from study.approval import approve_draft
-from study.drafting import generate_draft
-from study.intake import add_sources
-from study.models import RecallQuestion, SourceReference
-from study.recall import (
-    generate_first_pass_questions,
-    record_session,
-    score_answer,
-    select_next_questions_weak,
-    update_weakness_profile,
-)
-from study.storage import load_progress
-from study.subjects import create_subject
-
-
-def test_full_subject_lifecycle_and_deep_recoverability(tmp_path: Path):
-    workspace_root = tmp_path / "workspace"
-    subject_root = create_subject(workspace_root, "thermo", "Thermodynamics")
-
-    add_sources(
-        subject_root,
-        [
-            SourceReference(kind="native", content="Energy and entropy foundations."),
-            SourceReference(
-                kind="web_search",
-                content="Heat engines and state functions.",
-                metadata={"url": "https://example.com/thermo"},
-            ),
-            SourceReference(
-                kind="user_file",
-                content="Uploaded thermodynamics notes.",
-                metadata={"filename": "thermo_notes.md"},
-            ),
-            SourceReference(kind="pasted_text", content="Pasted study material."),
-        ],
-    )
-
-    generate_draft(subject_root, "Thermodynamics")
-    approve_draft(subject_root)
-
-    first_pass_questions = generate_first_pass_questions(subject_root)
-    assert len(first_pass_questions) >= 3
-
-    draft_content = (subject_root / "learning_draft.md").read_text(encoding="utf-8")
-    weak_question = first_pass_questions[0]
-    weak_answer = "This is a shallow incorrect explanation."
-    weak_score = min(
-        0.2,
-        score_answer(weak_question, weak_answer, draft_content=draft_content),
-    )
-
-    record_session(
-        subject_root,
-        [weak_question],
-        [weak_answer],
-        [weak_score],
-    )
-    update_weakness_profile(subject_root)
-    adaptive_questions = select_next_questions_weak(subject_root, n=3)
-
-    assert len(adaptive_questions) >= 1
-
-    assert (subject_root / "learning_draft.md").is_file()
-    assert (subject_root / "recall_history.jsonl").is_file()
-    assert (subject_root / "source_reference_data").is_dir()
-    assert (subject_root / "session_logs").is_dir()
-    assert (subject_root / "progress_state.json").is_file()
-
-    log_text = (subject_root / "session_logs" / "operations.log").read_text(
-        encoding="utf-8"
-    )
-    assert "created subject_id=thermo" in log_text
-    assert "added source kind=native" in log_text
-    assert "generated learning_draft.md" in log_text
-    assert "approved draft" in log_text
-    assert "generated first-pass recall questions" in log_text
-    assert "recorded recall session" in log_text
-    assert "updated weakness profile" in log_text
-    assert "selected adaptive weak questions" in log_text
-
-    history_lines = (subject_root / "recall_history.jsonl").read_text(
-        encoding="utf-8"
-    ).strip().splitlines()
-    assert len(history_lines) >= 1
-
-    history_payload = json.loads(history_lines[-1])
-    assert history_payload["questions"][0]["topic"] == weak_question.topic
-    assert history_payload["answers"] == [weak_answer]
-    assert history_payload["scores"] == [weak_score]
-
-    loaded = load_progress(subject_root)
-
-    assert loaded.phase == "recall_adaptive"
-    assert loaded.approval_status is True
-    assert loaded.draft_version_hash
-    assert loaded.next_recalls_cursor > 0
-    assert len(loaded.weak_points) >= 1
-    assert any(
-        weak_point.topic == weak_question.topic and weak_point.weakness_score < 0.5
-        for weak_point in loaded.weak_points
-    )
-```
-
-Run:
-
-```bash
-uv run pytest tests/test_e2e.py -v
-```
-
-Expected output before final hardening:
-
-```text
-FAILED tests/test_e2e.py::test_full_subject_lifecycle_and_deep_recoverability
-AssertionError: expected full lifecycle state and session log evidence
-```
-
----
-
-## Step 10.2: Implement missing E2E hardening
-
-Patch only what is necessary to satisfy the lifecycle proof:
-
-```python
-# Implementation constraints for final hardening:
-# - Do not change the locked subject_root API convention.
-# - Do not weaken approval checks.
-# - Do not remove weak-point evidence from progress_state.json.
-# - Do not make the session log assertion pass by writing empty placeholder text.
-```
-
-Expected implementation checks:
-
-```python
-# src/study/recall.py
-# Ensure record_session logs:
-log_operation(subject_root, "recorded recall session ...")
-
-# Ensure update_weakness_profile logs:
-log_operation(subject_root, "updated weakness profile ...")
-
-# Ensure select_next_questions_weak logs:
-log_operation(subject_root, "selected adaptive weak questions ...")
-
-# Ensure state remains:
-state.phase = "recall_adaptive"
-state.approval_status = True
-state.draft_version_hash is not None
-state.next_recalls_cursor > 0
-len(state.weak_points) >= 1
-```
-
----
-
-## Step 10.3: Run full E2E and suite
-
-Run:
-
-```bash
-uv run pytest tests/test_e2e.py -v
-```
-
-Expected output:
-
-```text
-tests/test_e2e.py::test_full_subject_lifecycle_and_deep_recoverability PASSED
-```
-
-Run full suite:
-
-```bash
-uv run pytest -v
-```
-
-Expected output:
-
-```text
-tests/test_models.py::test_models_validate_required_fields PASSED
-tests/test_subjects.py::test_create_subject_creates_locked_subject_root PASSED
-tests/test_subjects.py::test_subject_root_for_uses_plural_subjects PASSED
-tests/test_subjects.py::test_list_and_delete_subjects PASSED
-tests/test_storage.py::test_save_load_progress_state PASSED
-tests/test_storage.py::test_recall_history_append_and_read PASSED
-tests/test_storage.py::test_session_log_contains_operational_content PASSED
-tests/test_intake.py::test_add_sources_persists_all_seed_source_kinds PASSED
-tests/test_intake.py::test_intake_logs_operational_content PASSED
-tests/test_drafting.py::test_generate_draft_produces_dense_concept_book PASSED
-tests/test_drafting.py::test_draft_uses_bibliography_only_references PASSED
-tests/test_drafting.py::test_draft_updates_progress_hash_and_logs PASSED
-tests/test_approval_gate.py::test_approve_sets_status_and_phase PASSED
-tests/test_approval_gate.py::test_approve_logs_operational_content PASSED
-tests/test_approval_gate.py::test_recall_rejects_unapproved_before_question_generation PASSED
-tests/test_recall_sequential.py::test_first_pass_questions_are_sequential_and_open_ended PASSED
-tests/test_recall_sequential.py::test_first_pass_requires_approval_before_parsing_draft PASSED
-tests/test_recall_sequential.py::test_first_pass_updates_cursor_phase_and_logs PASSED
-tests/test_recall_scoring.py::test_score_answer_returns_normalized_score PASSED
-tests/test_recall_scoring.py::test_decompose_misconceptions_returns_concrete_explanation PASSED
-tests/test_recall_scoring.py::test_record_session_persists_weak_points_and_history_evidence PASSED
-tests/test_recall_scoring.py::test_record_session_requires_approval PASSED
-tests/test_adaptive_recall.py::test_select_next_questions_weak_requires_approval_before_selection PASSED
-tests/test_adaptive_recall.py::test_weak_topics_selected_with_recall_history_evidence PASSED
-tests/test_cli_integration.py::test_full_workflow_via_cli PASSED
-tests/test_cli_integration.py::test_cli_recall_fails_without_approval_before_generation PASSED
-tests/test_e2e.py::test_full_subject_lifecycle_and_deep_recoverability PASSED
-```
-
----
-
-## Step 10.4: Run quality checks
-
-Run:
-
-```bash
-uv run pytest -v
-git diff --check
-```
-
-Expected output:
-
-```text
-... PASSED
-```
-
-```text
-# git diff --check prints no output
-```
-
----
-
-## Step 10.5: Commit
-
-```bash
-git add src tests pyproject.toml
-git commit -m "test: prove full subject lifecycle and recoverability"
-```
-
-Expected output:
-
-```text
-[study-harness-impl ...] test: prove full subject lifecycle and recoverability
-```
-
----
-
-# Final Self-Review Checklist
-
-| Requirement | Locked in Task | Verification |
-|---|---:|---|
-| Subject storage under `<workspace_root>/subjects/<subject_id>/` | 1 | `test_create_subject_creates_locked_subject_root` |
-| One subject = one whole study topic | 1–10 | `ProgressState.subject_id`, `ProgressState.topic` |
-| Sources: native, web_search, user_file, pasted_text | 3, 10 | `test_add_sources_persists_all_seed_source_kinds` |
-| Dense bottom-up concept-book draft | 4 | `test_generate_draft_produces_dense_concept_book` |
-| Bibliography-only references | 4 | `test_draft_uses_bibliography_only_references` |
-| Approval gate before recall | 5, 6, 8, 9 | `test_recall_rejects_unapproved_before_question_generation` |
-| First recall pass sequential | 6 | `test_first_pass_questions_are_sequential_and_open_ended` |
-| Structured open-ended prompts, not MC-first | 6 | Prompt format assertions |
-| Scoring and misconception decomposition | 7 | `test_score_answer_returns_normalized_score`, `test_decompose_misconceptions_returns_concrete_explanation` |
-| Weak-point persistence with concrete evidence | 7, 8 | `len(weak_points) >= 1`, `weakness_score < 0.5`, recall history evidence |
-| Adaptive retest prioritizes weak points randomly | 8 | `test_weak_topics_selected_with_recall_history_evidence` |
-| Adaptive recall approval check | 8 | `test_select_next_questions_weak_requires_approval_before_selection` |
-| CLI recall checks approval before generation | 9 | `test_cli_recall_fails_without_approval_before_generation` |
-| Required artifacts exist | 10 | E2E artifact assertions |
-| `session_logs/` content verified | 2, 3, 4, 5, 6, 7, 8, 10 | E2E log content assertions |
-| Deep recoverability proof | 10 | phase, approval, hash, cursor, weak points |
-
----
-
-# Explicit Reset Fixes Applied
-
-## Fix 1: Subject-root API convention locked
-
-All subject-data operations use:
-
-```python
-subject_root: Path
-```
-
-or:
-
-```python
-workspace_root: Path, subject_id: str
-```
-
-The ambiguous bare data-root API is not allowed.
-
-## Fix 2: ApprovalRequiredError enforced across recall functions
-
-Approval checks exist in:
-
-```python
-generate_first_pass_questions(subject_root)
-record_session(subject_root, questions, answers, scores)
-update_weakness_profile(subject_root)
-select_next_questions_weak(subject_root, n)
-```
-
-CLI recall also checks approval before generation.
-
-## Fix 3: Weak-point tests assert concrete evidence
-
-Task 7 requires:
-
-```python
-assert len(weak_points) >= 1
-assert any(wp.weakness_score < 0.5 for wp in weak_points)
-```
-
-Task 8 additionally proves weak topics from `recall_history.jsonl` appear in selected adaptive questions.
-
-## Fix 4: Recovery test is deep, not shallow
-
-Task 10 requires:
-
-```python
-assert loaded.phase == "recall_adaptive"
-assert loaded.approval_status is True
-assert loaded.draft_version_hash
-assert loaded.next_recalls_cursor > 0
-assert len(loaded.weak_points) >= 1
-```
-
-## Fix 5: `session_logs/` content is verified
-
-Task 10 checks actual operational log entries, not merely directory existence.
-
----
-
-# Plan Contract Lock
-
-```yaml
-approved_authority: seed_504ad2a94198
-revision: v3
-target_artifact: /home/user01/project/study/my-study/.worktree/study-harness/PLAN.md
-governed_downstream_entry: superpowers:subagent-driven-development
-controlling_objective: Build full CLI study harness with subject lifecycle, dense draft generation, approval-gated recall, scoring, weak-point tracking, and adaptive retest.
-subject_storage_contract: <workspace_root>/subjects/<subject_id>/
-api_contract: Every subject-data function receives subject_root or (workspace_root, subject_id); ambiguous bare data-root parameters are prohibited.
-approval_contract: Recall question generation, recall session recording, weakness update, adaptive selection, and CLI recall must check approval_status before recall work proceeds.
-weakness_contract: Weak points must be persisted in ProgressState.weak_points and evidenced by recall_history.jsonl.
-recoverability_contract: Another agent must recover phase, approval_status, draft_version_hash, next_recalls_cursor, weak_points, source manifest, recall history, and session logs from disk.
-explicit_prohibitions:
-  - no web UI
-  - no standalone app
-  - no beginner tutorial mode
-  - no multiple-choice-first recall mode
-  - no calendar-based spaced repetition scheduler
-  - no ambiguous bare root parameter for subject-data functions
-  - no recall generation before approval
-  - no shallow recoverability test
-ordering_acceptance_constraints:
-  - tasks 0 through 10 execute in order
-  - each task starts with failing tests
-  - each task ends with passing tests and commit
-  - final acceptance requires full pytest suite pass and git diff --check clean
-invalidation_rule: Any change to storage layout, approval boundary, recall-first question style, or recoverability requirements requires re-supervision.
-branch_entry_constraint: study-harness-impl branch/worktree only.
-```
-
----
-
-# Execution Handoff
-
-This v3 plan replaces PLAN.md v2 entirely. Implement it as a fresh artifact line, not as a patch-shaped retry of the failed plan. The required downstream implementation entry is:
-
-```text
-superpowers:subagent-driven-development
-```
-
-Use task-by-task TDD, preserve the subject-root API convention, and do not weaken approval-gate or recoverability tests.
-````
+[study-]()
