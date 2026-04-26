@@ -1,4 +1,4 @@
-"""Tests for LM-driven drafting — _build_learning_system, fallback, and _render_draft."""
+import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -82,12 +82,12 @@ def test_render_draft_produces_sectioned_output(tmp_path) -> None:
 
     draft = _render_draft(system)
     assert "Test Topic" in draft
-    assert "# Chapter 1:" in draft
-    assert "## Concept Reconstruction" in draft
-    assert "## Recall Hooks" in draft
-    assert "## Learning Model" in draft
-    assert "# References" in draft
+    assert "# 문제 배경" in draft
+    assert "## 개념 정의" in draft
+    assert "# 복습 질문" in draft
     assert "Source 1" in draft
+    sections = [s.strip() for s in re.findall(r'^##\s+(.+?)$', draft, flags=re.MULTILINE)]
+    assert len(sections) == 8
 
 
 def test_generate_draft_uses_config_not_hardcoded_mock(tmp_path, monkeypatch) -> None:
@@ -102,7 +102,7 @@ def test_generate_draft_uses_config_not_hardcoded_mock(tmp_path, monkeypatch) ->
 
     draft = generate_draft(root, "Test Topic")
     assert len(draft) >= 3000
-    assert draft.count("# Chapter ") >= 3
+    assert len([s for s in re.findall(r'^##\s+(.+?)$', draft, flags=re.MULTILINE)]) == 8
 
     state = load_progress(root)
     assert state.phase == "drafting"

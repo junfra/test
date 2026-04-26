@@ -1,3 +1,4 @@
+import re
 """Integration test for end-to-end mock LM draft generation."""
 from pathlib import Path
 
@@ -44,11 +45,9 @@ def test_mock_lm_draft_is_dense_sectioned_and_non_derivative(tmp_path, monkeypat
     draft = generate_draft(root, "Operating Systems")
 
     assert len(draft) >= 3000
-    assert draft.count("# Chapter ") >= 3
-    assert "## Concept Reconstruction" in draft
-    assert "## Recall Hooks" in draft
-    assert "## Learning Model" in draft
-    assert "# References" in draft
+    assert len([s for s in re.findall(r'^##\s+(.+?)$', draft, flags=re.MULTILINE)]) == 8
+    assert "## 문제 배경" in draft
+    assert "## 복습 질문" in draft
     assert copied_sentence not in draft.split("# References", 1)[0]
 
     state = load_progress(root)

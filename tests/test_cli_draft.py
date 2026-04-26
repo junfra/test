@@ -61,9 +61,9 @@ class TestCLIDraft:
         assert draft_path.exists(), "Draft file must be created"
 
         md = draft_path.read_text()
-        chapters = re.findall(r"^# (.+)$", md, flags=re.MULTILINE)
-        assert len(chapters) >= 3, (
-            f"Draft should have at least 3 chapters, got {len(chapters)}: {chapters}"
+        sections = [s.strip() for s in re.findall(r'^##\s+(.+?)$', md, flags=re.MULTILINE)]
+        assert len(sections) == 8, (
+            f"Draft should have exactly 8 sections, got {len(sections)}: {sections}"
         )
 
     def test_cli_draft_error_on_missing_subject(self):
