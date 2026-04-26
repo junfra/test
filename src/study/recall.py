@@ -28,7 +28,7 @@ def extract_sections(draft_text: str) -> list[tuple[str, str, str]]:
 
     for line in lines:
         # New top-level chapter resets context
-        if re.match(r"^#\s+", line):
+        if re.match(r"^[#]+", line):
             _flush_section(sections, current_chapter, current_title, "\n".join(section_lines))
             current_chapter = line.strip().lstrip("# ").strip()
             current_title = None
@@ -76,8 +76,34 @@ def generate_prompt_template(topic: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Public API — first pass generation
+# Chapter-level fallback for drafts without ## headers  
 # --------------------------------------------------------------------------- #
+def _extract_chapters_as_fallback(draft_text: str) -> list[tuple[str, str, str]]:
+    """Fallback for drafts without ## headers — use # Chapter headers as sections."""
+    lines = draft_text.splitlines()
+    chapters: list[tuple[str, str, str]] = []
+    current_title = None
+    section_lines: list[str] = []
+
+    for line in lines:
+        if re.match(r"^# (References|# Bibliography)", line):
+            # Flush last chapter before stopping
+            _flush_section(chapters, current_title, current_title, "\n".join(section_lines))
+            break
+        
+        if line.startswith("#") and not line.startswith("##"):
+            title = line.strip().lstrip("# ").strip()
+            # If we have a previous chapter with content, flush it first
+            if current_title:
+                _flush_section(chapters, current_title, current_title, "\n".join(section_lines))
+            current_title = title
+            section_lines = []
+        else:
+            if line.strip():  # skip blank lines
+                section_lines.append(line)
+
+    return chapters
+
 
 def generate_first_pass_questions(
     subject_root: Path,
@@ -117,9 +143,7 @@ def generate_first_pass_questions(
     draft_text = draft_path.read_text(encoding="utf-8")
     sections = extract_sections(draft_text)
     
-    # Fallback: if no ## headers, try extracting from # Chapter headers
-    if not sections:
-        sections = _extract_chapters_as_fallback(draft_text)
+
 
     # 3. Generate structured open-ended prompts per section (up to n)
     questions: list[RecallQuestion] = []
