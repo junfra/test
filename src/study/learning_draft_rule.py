@@ -83,3 +83,45 @@ def validate_section_structure(
         )
 
     return SectionStructureResult(passed=True, found_sections=found_sections, errors=[])
+
+
+# ---- Body length metric (Task 3) ----
+ANY_HEADING_RE = re.compile(r"^#{1,6}\s+.+?$", re.MULTILINE)
+REFERENCES_RE = re.compile(
+    r"^#{1,6}\s+(References|참고문헌)\s*$.*\Z",
+    re.MULTILINE | re.DOTALL | re.IGNORECASE
+)
+TOC_BLOCK_RE = re.compile(
+    r"^#{1,6}\s+(목차|Table of Contents|TOC)\s*$.*?(?=^#{1,6}\s+|\Z)",
+    re.MULTILINE | re.DOTALL | re.IGNORECASE
+)
+
+
+def _dedupe_repeated_lines(text: str) -> str:
+    lines = [line.rstrip() for line in text.splitlines()]
+    seen: dict[str, int] = {}
+    kept: list[str] = []
+    for line in lines:
+        normalized = re.sub(r"\s+", " ", line.strip())
+        if not normalized:
+            kept.append("")  # preserve blank lines
+            continue
+        seen[normalized] = seen.get(normalized, 0) + 1
+        if seen[normalized] == 1:  # keep only first occurrence
+            kept.append(line)
+    compact = "\n".join(kept)
+    return re.sub(r"\n{3,}", "\n\n", compact).strip()
+
+
+def _strip_non_body_blocks(text: str) -> str:
+    without_references = REFERENCES_RE.sub("", text)
+    without_toc = TOC_BLOCK_RE.sub("", without_references)
+    without_headings = ANY_HEADING_RE.sub("", without_toc)
+    return re.sub(r"\n{3,}", "\n\n", without_headings).strip()
+
+
+def count_substantive_body_chars(text: str) -> int:
+    body = _strip_non_body_blocks(text)
+    body = _dedupe_repeated_lines(body)
+    return len(body)
+
