@@ -116,6 +116,10 @@ def generate_first_pass_questions(
 
     draft_text = draft_path.read_text(encoding="utf-8")
     sections = extract_sections(draft_text)
+    
+    # Fallback: if no ## headers, try extracting from # Chapter headers
+    if not sections:
+        sections = _extract_chapters_as_fallback(draft_text)
 
     # 3. Generate structured open-ended prompts per section (up to n)
     questions: list[RecallQuestion] = []
