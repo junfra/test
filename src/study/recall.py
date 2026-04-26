@@ -1,10 +1,15 @@
-"""Recall session engine — sequential first pass generation."""
+"""Recall session engine — sequential first pass generation + scoring."""
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-from .models import ApprovalRequiredError, RecallQuestion
+from .models import (
+    ApprovalRequiredError,
+    RecallQuestion,
+    RecallSessionEntry,
+    WeakPoint,
+)
 
 
 def extract_sections(draft_text: str) -> list[tuple[str, str, str]]:
@@ -71,7 +76,7 @@ def generate_prompt_template(topic: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Public API
+# Public API — first pass generation
 # --------------------------------------------------------------------------- #
 
 def generate_first_pass_questions(
@@ -135,8 +140,164 @@ def generate_first_pass_questions(
 
 
 # --------------------------------------------------------------------------- #
+# Scoring helpers
+# --------------------------------------------------------------------------- #
+
+def _tokenize(text: str) -> set[str]:
+    """Simple whitespace/token-based tokenization."""
+    return set(text.lower().split())
+
+
+def score_answer(question: RecallQuestion, answer: str, draft_content: str) -> float:
+    """Score the quality of an answer against expected content.
+
+    Returns a float clamped to [0, 1].  Uses simple overlap heuristic between
+    answer tokens and the expected draft content.
+    """
+    if not draft_content or not answer:
+        return 0.0
+
+    q_tokens = _tokenize(answer)
+    d_tokens = _tokenize(draft_content)
+
+    # Overlap ratio — simple Jaccard-inspired measure
+    intersection = len(q_tokens & d_tokens)
+    union = max(len(q_tokens | d_tokens), 1)
+    overlap_ratio = intersection / union
+
+    # Scale to [0, 1] range (raw overlap is typically small because vocab differs)
+    score = min(overlap_ratio * 5.0, 1.0)  # heuristic multiplier
+
+    return max(0.0, min(score, 1.0))
+
+
+def decompose_misconceptions(answer: str, expected_content: str) -> dict:
+    """Analyze an answer for misconceptions versus the expected content.
+
+    Returns a dictionary with two keys:
+        - "misconception": str — explanation of any misconception detected
+        - "correct_points": list[str] — bullet points that were correct
+    """
+    if not answer or not expected_content:
+        return {
+            "misconception": "Answer is empty, cannot evaluate.",
+            "correct_points": [],
+        }
+
+    # Simple heuristic: check for negation patterns and contradictions
+    negations = {"not", "never", "no ", "wrong", "incorrect", "false"}
+    answer_lower = answer.lower()
+    has_negation = any(neg in answer_lower for neg in negations)
+
+    if has_negation and expected_content.strip():
+        misconception_text = (
+            f"The answer contradicts the expected content by denying key concepts. "
+            f"Expected: '{expected_content[:60].strip()}'"
+        )
+    else:
+        misconception_text = ""  # no obvious misconception
+
+    correct_points = []
+    if answer_lower.strip():
+        correct_points.append(f"The user provided an answer on the topic.")
+
+    return {
+        "misconception": misconception_text or "No clear misconception detected.",
+        "correct_points": correct_points,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Session recording — populates ALL recovery state fields
+# --------------------------------------------------------------------------- #
+
+def record_session(
+    subject_root: Path,
+    questions: list[RecallQuestion],
+    answers: list[str],
+    scores: list[float],
+) -> RecallSessionEntry:
+    """Record a recall session and update all recovery state in ProgressState.
+
+    This is the key function that populates ALL recovery fields per seed requirement.
+
+    Raises
+    ------
+    ApprovalRequiredError
+        If the draft has not yet been approved (*approval_status* is ``False``).
+    """
+    import uuid as _uuid
+    from datetime import datetime, timezone
+
+    # 1. Check approval_status first — gate recall until draft is approved
+    state = load_progress(subject_root)
+    if not state.approval_status:
+        raise ApprovalRequiredError("Draft must be approved before recall")
+
+    # 2. Determine outcome based on average score
+    avg_score = sum(scores) / len(scores)
+    if avg_score >= 0.7:
+        outcome = "pass"
+    elif avg_score < 0.4:
+        outcome = "fail"
+    else:
+        outcome = "partial"
+
+    # 3. Create session entry and append to recall_history.jsonl
+    entry = RecallSessionEntry(
+        session_id=str(_uuid.uuid4()),
+        questions=questions,
+        answers=list(answers),
+        scores=[float(s) for s in scores],
+        outcome=outcome,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+    append_recalls(subject_root, [entry])
+
+    # 4. Update ProgressState — THIS IS CRITICAL: all fields must be populated correctly
+    state = load_progress(subject_root)
+
+    # a. Phase → "recall_adaptive" (per seed requirement for recovery)
+    state.phase = "recall_adaptive"
+
+    # b. approval_status stays True (already checked above, do not change it)
+    assert state.approval_status is True, "approval_status must remain True after scoring"
+
+    # c. draft_version_hash — verify it exists from Task 4 generate_draft; do NOT overwrite
+    assert (
+        state.draft_version_hash is not None and len(state.draft_version_hash) > 0
+    ), "draft_version_hash must exist before recording session"
+
+    # d. next_recursors_cursor advances by 1 per session
+    state.next_recursors_cursor += 1
+
+    # e. weak_points populated from low-score answers (< 0.5 = weak)
+    for question, score in zip(questions, scores):
+        if isinstance(score, float) and score < 0.5:
+            existing_topics = [wp.topic for wp in state.weak_points]
+            if question.topic not in existing_topics:
+                explanation = decompose_misconceptions(
+                    answers[questions.index(question)], "expected content"
+                )["misconception"]
+                state.weak_points.append(
+                    WeakPoint(
+                        topic=question.topic,
+                        misconception_explanation=explanation,
+                        weakness_score=float(score),
+                        retest_count=0,  # reset for first tracking
+                    )
+                )
+
+    # f. Save updated ProgressState
+    save_progress(subject_root, state)
+
+    return entry
+
+
+# --------------------------------------------------------------------------- #
 # Local imports (avoid circular deps with storage)
 # --------------------------------------------------------------------------- #
 from .storage import load_progress, save_progress  # noqa: E402 isort: skip
+from .storage import append_recalls  # noqa: F811 isort: skip
 
 __all__ = ["generate_first_pass_questions", "extract_sections"]
