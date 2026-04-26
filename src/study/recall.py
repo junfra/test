@@ -15,34 +15,45 @@ from .models import (
 def extract_sections(draft_text: str) -> list[tuple[str, str, str]]:
     """Parse a markdown draft into (chapter, section_title, content) tuples.
 
-    Sections are identified by ``## headers`` within each ``# Chapter`` block.
-    The content spans from the header line up to the next ## or EOF.
-
-    Returns an empty list if no sections are found.
+    Sections are identified by ``##`` headers inside ``# Chapter`` blocks.
+    Top-level title and references are ignored.
     """
+
     lines = draft_text.splitlines()
     sections: list[tuple[str, str, str]] = []
+
     current_chapter: str | None = None
-    section_lines: list[str] = []
     current_title: str | None = None
+    section_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal section_lines, current_title, current_chapter
+        if current_chapter and current_title:
+            sections.append((current_chapter, current_title, "\n".join(section_lines).strip()))
+        section_lines = []
 
     for line in lines:
-        # Section header (##) must be checked BEFORE top-level chapter (#)
-        if re.match(r"^##\s+", line):
-            _flush_section(sections, current_chapter, current_title, "\n".join(section_lines))
-            current_title = line.strip().lstrip("# ").strip()
-            section_lines = [line]  # keep header in content for context
+        if re.match(r"^#\s+References\s*$", line):
+            flush()
+            break
 
-        elif re.match(r"^#+\s", line):
-            _flush_section(sections, current_chapter, current_title, "\n".join(section_lines))
+        if re.match(r"^#\s+Chapter\s+\d+:", line):
+            flush()
             current_chapter = line.strip().lstrip("# ").strip()
-            current_title = current_chapter  # Default to chapter title for first section
+            current_title = None
             section_lines = []
+            continue
 
-        else:
+        if re.match(r"^##\s+", line):
+            flush()
+            current_title = line.strip().lstrip("# ").strip()
+            section_lines = [line]
+            continue
+
+        if current_title:
             section_lines.append(line)
 
-    _flush_section(sections, current_chapter, current_title, "\n".join(section_lines))
+    flush()
     return sections
 
 
@@ -160,14 +171,9 @@ def generate_first_pass_questions(
 
     # 3. Generate structured open-ended prompts per section (up to n)
     questions: list[RecallQuestion] = []
-    for i, (chapter, title, _content) in enumerate(sections):
-        # Skip chapter-only sections (where title == chapter, meaning no ## header)
-        if title == chapter:
-            continue
-        if len(questions) >= n:
-            break
+    for i, (chapter, title, _content) in enumerate(sections[:n]):
         q = RecallQuestion(
-            id=f"q_{len(questions) + 1}",
+            id=f"q_{i + 1}",
             topic=title,
             prompt=(
                 f"Based on the draft '{title}' under '{chapter}', "
@@ -179,7 +185,7 @@ def generate_first_pass_questions(
     # 4. Update progress_state.json — phase and cursor
     state = load_progress(subject_root)
     state.phase = "recall_first_pass"
-    state.next_recursors_cursor = max(state.next_recursors_cursor, len(questions))
+    state.next_recursors_cursor += len(questions)
     save_progress(subject_root, state)
 
     return questions

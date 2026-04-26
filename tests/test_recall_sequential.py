@@ -31,17 +31,24 @@ def _create_subject_and_draft(workspace_root: Path, subject_id: str, topic: str)
     # Valid markdown structure: # Chapter → ## Section
     draft_path.write_text("""# Introduction to Python
 
-## Variables and Types
+# Chapter 1: Variables and Types
 Python has dynamic typing. Integers, floats, strings are built-in types.
 Use `type()` to inspect an object's type at runtime.
 
+## Variables and Types
+Python has dynamic typing. Integers, floats, strings are built-in types.
+
 ## Functions
-Functions are defined with `def`. Parameters can have defaults:
-`def greet(name="World"): ...`
+Functions are defined with `def`. Parameters can have defaults.
+
+# Chapter 2: Control Flow
+Control flow determines which code paths execute.
 
 ## Control Flow
 `if`, `elif`, `else` control execution paths.
-Loops use `for` and `while` keywords.
+
+# Chapter 3: Advanced Topics
+Advanced Python features include decorators and context managers.
 
 ## References
 1. Python.org documentation

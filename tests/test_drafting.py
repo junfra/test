@@ -64,11 +64,11 @@ class TestDraftGeneration:
         assert isinstance(draft_text, str) and len(draft_text) > 200
 
         # Verify >= 3 chapters (# headers with substantive content after them)
-        chapter_headers = [h for h in re.findall(r'^#\s+.+$', draft_text, re.MULTILINE)]
+        chapter_headers = [h for h in re.findall(r'^#\s+Chapter\s+\d+:', draft_text, re.MULTILINE)]
         assert len(chapter_headers) >= 3, f"Expected at least 3 chapters, found {len(chapter_headers)}: {chapter_headers}"
 
         # Verify all body sections > 50 chars (between chapter headers or start of doc and first header)
-        parts = re.split(r'^#\s+.+$', draft_text, flags=re.MULTILINE)
+        parts = re.split(r'^#\s+Chapter\s+\d+:', draft_text, flags=re.MULTILINE)
         for i, part in enumerate(parts):
             if i == 0:
                 continue  # skip preamble before first header
@@ -197,7 +197,7 @@ class TestEmptySources:
         from study.drafting import generate_draft
         draft_text = generate_draft(root, "Empty Topic")
 
-        chapter_headers = [h for h in re.findall(r'^#\s+.+$', draft_text, re.MULTILINE)]
+        chapter_headers = [h for h in re.findall(r'^#\s+Chapter\s+\d+:', draft_text, re.MULTILINE)]
         assert len(chapter_headers) >= 3
 
         ref_section_idx = draft_text.find("# References")
