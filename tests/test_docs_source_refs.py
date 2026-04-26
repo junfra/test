@@ -38,9 +38,11 @@ def test_skill_docs_use_oracle_cli_path():
 def test_skill_docs_use_prompt_file_examples():
     for relpath in [Path("live-SKILL.md"), Path("skills/oracle-browser/SKILL.md"), Path("output/SKILL.md")]:
         text = relpath.read_text(encoding="utf-8")
+        assert "Use `-p` for short inline prompts." in text
+        assert "Use `--file` for actual file attachments, source files, review targets, or context globs." in text
         assert "--prompt-file" in text
+        assert "`--prompt-file` is convenience sugar over `-p`" in text
         assert "--file /tmp/oracle_prompt.md" not in text
-        assert "`--prompt-file`" in text
 
 
 def test_skill_docs_describe_prompt_file_limits_and_encoding():
@@ -54,3 +56,10 @@ def test_skill_docs_describe_browser_inactivity_wait_limit():
     for relpath in [Path("live-SKILL.md"), Path("skills/oracle-browser/SKILL.md"), Path("output/SKILL.md")]:
         text = relpath.read_text(encoding="utf-8")
         assert "30 minutes" in text
+
+
+def test_skill_docs_require_inlining_file_contents_for_oracle_review():
+    for relpath in [Path("live-SKILL.md"), Path("skills/oracle-browser/SKILL.md"), Path("output/SKILL.md")]:
+        text = relpath.read_text(encoding="utf-8")
+        assert "Do not use `--prompt-file` as a replacement for upstream `--file`" in text
+        assert "A path mentioned inside prompt text is only prose unless the file is also supplied via `--file`." in text
