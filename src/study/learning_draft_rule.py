@@ -125,3 +125,80 @@ def count_substantive_body_chars(text: str) -> int:
     body = _dedupe_repeated_lines(body)
     return len(body)
 
+
+
+# ────────────────────────────────────────────
+# ProhibitedPatternDetector — hollow writing detection
+# ────────────────────────────────────────────
+
+from collections import Counter as _Counter
+
+
+@dataclass(frozen=True)
+class ProhibitedPatternResult:
+    passed: bool
+    matches: list[str]  # which patterns were detected
+    errors: list[str]   # error messages for each match
+
+
+TEMPLATE_PLACEHOLDER_RE = re.compile(r"(Insert topic|\[Topic\]|\{\{topic\}\})", re.IGNORECASE)
+
+GENERIC_IMPORTANCE_RE = re.compile(
+    r"(이 개념은 매우 중요하다|이것은 매우 중요하다|잘 이해해야 한다|다양한 상황에서 활용된다)"
+)
+
+PROCEDURE_WITHOUT_CAUSALITY_RE = re.compile(r"(먼저.+다음.+마지막으로)", re.DOTALL)
+
+# Causal words that make a procedural description acceptable
+CAUSAL_WORDS_RE = re.compile(
+    r"왜냐하면|따라서|원인|결과|조건|검증|실패",
+)
+
+
+def _has_causality_in_span(text: str, span_match: "re.Match[str]") -> bool:
+    """Return True if a causal word appears within the matched span."""
+    return bool(CAUSAL_WORDS_RE.search(span_match.group(0)))
+
+
+def detect_prohibited_patterns(text: str, rule=None) -> ProhibitedPatternResult:
+    """Detect hollow writing patterns in a draft.
+
+    Checks four categories of prohibited pattern and returns a result with
+    ``passed=False`` when any pattern is detected.
+    """
+    matches: list[str] = []
+    errors: list[str] = []
+
+    # 1. Template placeholders
+    if TEMPLATE_PLACEHOLDER_RE.search(text):
+        matches.append("template_placeholder")
+        errors.append("prohibited template placeholder detected in draft")
+
+    # 2. Generic importance claims — trigger only at 2+ occurrences
+    generic_count = len(GENERIC_IMPORTANCE_RE.findall(text))
+    if generic_count >= 2:
+        matches.append("generic_importance_claim")
+        errors.append(
+            f"detected {generic_count} generic importance claims (need specific reasoning)"
+        )
+
+    # 3. Procedure without causality — match procedural sequence, then check
+    proc_match = PROCEDURE_WITHOUT_CAUSALITY_RE.search(text)
+    if proc_match and not _has_causality_in_span(text, proc_match):
+        matches.append("procedure_without_causality")
+        errors.append("procedural description lacks causal explanation")
+
+    # 4. Repeated boilerplate (any line >= 20 chars appearing 3+ times)
+    lines = [line.rstrip() for line in text.splitlines()]
+    long_lines = [l for l in lines if len(l) >= 20]
+    freq = _Counter(long_lines)
+    repeated = any(count >= 3 for count in freq.values())
+    if repeated:
+        matches.append("repeated_boilerplate")
+        errors.append("repeated boilerplate detected (same line ≥ 3 times)")
+
+    return ProhibitedPatternResult(
+        passed=not bool(matches),
+        matches=matches,
+        errors=errors,
+    )
