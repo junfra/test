@@ -294,10 +294,103 @@ def record_session(
     return entry
 
 
+def _generate_retest_prompt(topic: str, misconception_explanation: str) -> str:
+    """Generate a focused retest question targeting the identified misconception."""
+    return f"Based on your previous weak understanding of '{topic}': {misconception_explanation}. Explain this concept clearly now."
+
+
+def select_next_questions_weak(
+    subject_root: Path,
+    n: int = 3,
+) -> list[RecallQuestion]:
+    """Generate targeted questions prioritizing weak areas with weighted random selection.
+
+    Parameters
+    ----------
+    subject_root : pathlib.Path
+        Path to the subject directory containing progress_state.json and learning_draft.md.
+    n : int
+        Maximum number of adaptive retest questions to generate (defaults to 3).
+
+    Returns
+    -------
+    list[RecallQuestion]
+        Ordered *RecallQuestion* instances targeting weak topics, or an empty list
+        when there are no recorded weak points.
+
+    Raises
+    ------
+    ApprovalRequiredError
+        If the draft has not yet been approved (*approval_status* is False).
+    """
+    # 1. Check approval status first — gate recall until draft is approved
+    state = load_progress(subject_root)
+    if not state.approval_status:
+        raise ApprovalRequiredError("Draft must be approved before adaptive retest")
+
+    weak_points = list(state.weak_points)
+    if not weak_points:
+        return []
+
+    # 2. Weighted random selection — lower weakness_score means weaker topic → higher weight
+    import random as _random
+
+    def weight_for_wp(wp):
+        return 1.0 / max(0.01, wp.weakness_score + 1.0 - wp.retest_count * 0.1)
+
+    topics = [wp.topic for wp in weak_points]
+    weights = [weight_for_wp(wp) for wp in weak_points]
+
+    # Weighted random selection without replacement (Fisher-Yates / reservoir style)
+    selected_indices: list[int] = []
+    available_idx = list(range(len(weak_points)))
+    avail_w = list(weights)
+
+    while len(selected_indices) < min(n, len(available_idx)):
+        total_weight = sum(avail_w) if avail_w else 1.0
+        r = _random.random() * total_weight
+        cumulative = 0.0
+        chosen_i = None
+        for i in range(len(available_idx)):
+            cumulative += avail_w[i]
+            if r <= cumulative:
+                chosen_i = i
+                break
+
+        if chosen_i is not None:
+            topic_idx = available_idx[chosen_i]
+            selected_indices.append(topic_idx)
+            del available_idx[chosen_i]
+            del avail_w[chosen_i]
+
+    # 3. Generate targeted questions for selected weak topics
+    draft_text = (subject_root / "learning_draft.md").read_text(encoding="utf-8")
+    questions: list[RecallQuestion] = []
+    for idx in sorted(selected_indices):
+        wp = weak_points[idx]
+        q = RecallQuestion(
+            id=f"ret_{len(questions) + 1}",
+            topic=wp.topic,
+            prompt=_generate_retest_prompt(wp.topic, wp.misconception_explanation),
+        )
+        questions.append(q)
+
+    # 4. Update retest_count for selected weak points
+    state = load_progress(subject_root)
+    for idx in sorted(selected_indices):
+        for i, existing_wp in enumerate(state.weak_points):
+            if existing_wp.topic == weak_points[idx].topic:
+                state.weak_points[i].retest_count += 1
+                break
+    save_progress(subject_root, state)
+
+    return questions
+
+
 # --------------------------------------------------------------------------- #
 # Local imports (avoid circular deps with storage)
 # --------------------------------------------------------------------------- #
 from .storage import load_progress, save_progress  # noqa: E402 isort: skip
 from .storage import append_recalls  # noqa: F811 isort: skip
 
-__all__ = ["generate_first_pass_questions", "extract_sections"]
+__all__ = ["generate_first_pass_questions", "extract_sections", "select_next_questions_weak"]
