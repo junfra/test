@@ -1,1 +1,12 @@
-.worktree/
+.venv/
+*.pyc
+__pycache__/
+.pytest_cache/
+.eggs/
+dist/
+build/
+*.egg-info/
+.coverage
+htmlcov/
+.DS_Store
+.env
