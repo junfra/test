@@ -196,16 +196,22 @@ def _render_draft(system: LearningDraftSystem) -> str:
     return "\n".join(parts).strip() + "\n"
 
 
-def _validate_draft_text(draft_text: str, *, learning_draft_rule=None) -> None:
+def _validate_draft_text(draft_text: str, *, learning_draft_rule=None, return_result=False) -> None | dict:
     """Validate a rendered draft text using the LearningDraftRule.
 
     Raises ``DraftValidationError`` when validation fails (any check returns
     ``passed=False``), with all failure details in the message so callers can
     inspect what went wrong.
+    
+    When *return_result* is True, return the result dict instead of raising;
+    this allows callers to inspect exit_conditions before deciding whether to
+    persist a draft (Task 4).
     """
     if learning_draft_rule is None:
         learning_draft_rule = LearningDraftRule.default()
     result = validate_learning_draft_rule(draft_text, rule=learning_draft_rule)
+    if return_result:
+        return result
     if not result["passed"]:
         raise DraftValidationError(
             f"Learning draft validation failed with {len(result['errors'])} error(s): " + "; ".join(result["errors"])
@@ -270,13 +276,28 @@ def generate_draft(
     The production path loads LM configuration from env/file, instantiates
     LMClient, calls the LM once per chapter, parses each response into the Seed
     ontology, renders the draft, saves learning_draft.md, and updates progress.
+
+    Exit conditions are checked at runtime (Task 4): if ``exit_conditions``
+    indicate failure, the draft is NOT persisted.
     """
 
     sources = load_source_data(subject_root)
     system = _build_learning_system(subject_root, topic, sources, lm_client=lm_client, skip_validation=skip_validation)
     draft_text = _render_draft(system)
     if not skip_validation:
-        _validate_draft_text(draft_text)
+        # Check exit conditions explicitly before persisting (Task 4).
+        result = validate_learning_draft_rule(draft_text)
+        ec = result["exit_conditions"]
+        reasons: list[str] = []
+        if not ec.get("rule_locked", False):
+            reasons.append("rule_locked")
+        if not ec.get("no_open_drift", False):
+            reasons.append("no_open_drift")
+        if reasons:
+            raise DraftValidationError(
+                f"Learning draft rejected by exit conditions ({', '.join(reasons)}); "
+                + "; ".join(result["errors"])
+            )
 
     draft_path = subject_root / "learning_draft.md"
     draft_path.write_text(draft_text, encoding="utf-8")

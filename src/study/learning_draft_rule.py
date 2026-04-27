@@ -396,17 +396,33 @@ def validate_learning_draft_rule(
                 f"body length {body_len} exceeds recommended max {rec_range['max']} (recommended range: min={rec_range.get('min', '?')}, max={rec_range['max']})"
             )
 
-    # Exit conditions for anti-drift enforcement (seed requirement)
+    # ─── Exit conditions — computed independently from overall `passed` (Task 4) ───
+    rule_locked = sec_result.passed and pattern_result.passed and density_result.passed
+    no_open_drift = True
+
+    # no_open_drift specifically rejects format-only compliance
+    pattern_result_no_drift = detect_prohibited_patterns(text, rule)
+    if not pattern_result_no_drift.passed:
+        for m in pattern_result_no_drift.matches:
+            if m in ("thin_section_body", "format_only_section_compliance"):
+                no_open_drift = False
+
+    # Also check body length as an open-drift signal (too short = thin sections)
+    if rule is not None and hasattr(rule, 'min_body_length_chars'):
+        body_len = count_substantive_body_chars(text)
+        if body_len < rule.min_body_length_chars:
+            no_open_drift = False
+
     return {
         "passed": passed,
         "errors": errors,
         "exit_conditions": {
-            "rule_locked": passed,  # length, structure, density, prohibited patterns all fixed
-            "no_open_drift": passed,  # section-title-only filling no longer passes
+            "rule_locked": rule_locked,
+            "no_open_drift": no_open_drift,
         },
         "state": {
-            "rule_locked": passed,
-            "no_open_drift": passed,
+            "rule_locked": rule_locked,
+            "no_open_drift": no_open_drift,
         },
     }
 

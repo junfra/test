@@ -374,3 +374,142 @@ class TestRenderFromLMStructure:
         assert "'핵심 판단 기준'.]" in rendered
         assert "'실패 사례'.]" in rendered
 
+
+
+class TestExitConditionsRuntimeGates:
+    """Task 4: exit conditions must function as actual runtime gates."""
+
+    def test_exit_conditions_rule_locked_computed_independently(self):
+        from unittest.mock import patch
+        from dataclasses import dataclass
+        from study.models import LearningDraftRule
+        from dataclasses import field
+        from study.learning_draft_rule import SectionStructureResult, ProhibitedPatternResult
+        from study.learning_draft_rule import validate_learning_draft_rule
+
+        draft = "## 문제 배경\nSome text." * 100
+
+        @dataclass
+        class DensityMock:
+            passed: bool = False
+            errors: list[str] = field(default_factory=lambda: ["density failed"])
+
+        with patch("study.learning_draft_rule.validate_section_structure") as m_sec, \
+             patch("study.learning_draft_rule.detect_prohibited_patterns") as m_pat, \
+             patch("study.learning_draft_rule.analyze_judgment_density") as m_dens:
+            m_sec.return_value = SectionStructureResult(passed=True, found_sections=LearningDraftRule.DEFAULT_REQUIRED_SECTIONS)
+            m_pat.return_value = ProhibitedPatternResult(passed=True, matches=[], errors=[])
+
+            @dataclass
+            class DensityMock:
+                passed: bool = False
+                errors: list[str] = field(default_factory=lambda: ["density failed"])
+
+            m_dens.return_value = DensityMock()
+            result = validate_learning_draft_rule(draft)
+            ec = result["exit_conditions"]
+            assert "rule_locked" in ec, f"Missing rule_locked in exit_conditions: {ec}"
+            # density failure should cause rule_locked to be False
+            assert not ec.get("rule_locked", True), f"Expected rule_locked=False when density fails, got {ec}"
+
+    def test_exit_conditions_no_open_drift_rejects_format_only(self):
+        """Draft with section headers but insufficient body -> no_open_drift = False."""
+        from study.learning_draft_rule import validate_learning_draft_rule
+
+        draft = ""
+        for s in ["문제 배경", "개념 정의", "동작 원리"]:
+            draft += f"## {s}\nShort text." + "\n\n"
+
+        from study.models import LearningDraftRule
+        result = validate_learning_draft_rule(draft, rule=LearningDraftRule.default())
+        ec = result["exit_conditions"]
+        assert not ec.get("no_open_drift", True), (
+            f"format-only draft should fail no_open_drift, got {ec}"
+        )
+
+    def test_exit_conditions_all_true_when_all_checks_pass(self):
+        """When all checks pass independently, both exit conditions are True."""
+        from unittest.mock import patch
+        from dataclasses import dataclass
+        from study.learning_draft_rule import (
+            validate_learning_draft_rule, SectionStructureResult,
+            ProhibitedPatternResult, analyze_judgment_density,
+        )
+
+        draft = ""
+        for s in ["문제 배경", "개념 정의", "동작 원리"]:
+            draft += f"## {s}\nThis section discusses why the mechanism matters because failure occurs when boundaries are violated." * 40 + "\n\n"
+
+        from dataclasses import field
+        @dataclass
+        class DensityMock:
+            passed: bool = True
+            paragraph_count: int = 20
+            weak_paragraph_indexes: list[int] = field(default_factory=list)
+            errors: list[str] = field(default_factory=list)
+
+        with patch("study.learning_draft_rule.validate_section_structure") as mock_sec, \
+             patch("study.learning_draft_rule.detect_prohibited_patterns") as mock_pat, \
+             patch("study.learning_draft_rule.analyze_judgment_density") as mock_dens:
+            mock_sec.return_value = SectionStructureResult(passed=True, found_sections=["문제 배경", "개념 정의", "동작 원리"])
+            mock_pat.return_value = ProhibitedPatternResult(passed=True, matches=[], errors=[])
+            mock_dens.return_value = DensityMock()
+
+            result = validate_learning_draft_rule(draft)
+            ec = result["exit_conditions"]
+            assert ec.get("rule_locked", False), f"Expected rule_locked=True, got {ec}"
+            assert ec.get("no_open_drift", False), f"Expected no_open_drift=True, got {ec}"
+
+    def test_generate_draft_skips_write_on_exit_condition_failure(self):
+        """If exit conditions fail, generate_draft must NOT write file or update state."""
+        from unittest.mock import patch
+        from pathlib import Path
+        from study.drafting import generate_draft
+        from study.learning_draft_rule import DraftValidationError
+
+        subject = Path("/tmp/test_subject_exit")
+        subject.mkdir(exist_ok=True)
+        (subject / "sources.json").write_text("[]", encoding="utf-8")
+        (subject / "progress.json").write_text('{"phase": "idle"}', encoding="utf-8")
+
+        from study.models import LearningDraftSystem
+        system = LearningDraftSystem(
+            topic="Test",
+            concept_layers=["cl"],
+            section_structure=[
+                f"## {s}\nBody content for {s}." + "\n" * 2
+                for s in ["문제 배경", "개념 정의", "동작 원리", "핵심 판단 기준",
+                          "실패 사례", "검증 방법", "유사 개념 비교", "복습 질문"]
+            ],
+            recall_hooks=["rh"], verification_points=["vp"], bibliography=["bib"],
+        )
+
+        with patch("study.drafting._build_learning_system") as mock_build, \
+             patch("study.drafting._render_draft") as mock_render, \
+             patch("study.drafting.validate_learning_draft_rule") as mock_val, \
+             patch("study.drafting.load_source_data", return_value=[]):
+            mock_build.return_value = system
+            mock_render.return_value = str(system)
+
+            # Make exit conditions fail: no_open_drift is False
+            mock_val.return_value = {
+                "passed": False,
+                "errors": ["thin section body detected"],
+                "exit_conditions": {"rule_locked": True, "no_open_drift": False},
+            }
+
+            with pytest.raises(DraftValidationError):
+                generate_draft(subject, "Test")
+
+        # Verify file was NOT written and state was NOT updated
+        assert not (subject / "learning_draft.md").exists(), \
+            "Draft file must NOT be created when exit conditions fail"
+
+        import json
+        progress = json.loads((subject / "progress.json").read_text())
+        assert progress["phase"] != "drafting", \
+            "State phase must NOT update to 'drafting' on exit condition failure"
+
+        # Cleanup
+        import shutil
+        shutil.rmtree(subject, ignore_errors=True)
