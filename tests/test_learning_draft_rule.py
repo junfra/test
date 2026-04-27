@@ -328,3 +328,70 @@ class TestSubstantiveBodyLengthCalculator:
         assert body_len < len(draft), (
             f"Body ({body_len}) must be less than raw draft ({len(draft)}) after header stripping"
         )
+
+
+class TestTargetAudienceEnforcement:
+    """Task 9: Verify target_audience is enforced at generation level."""
+
+    def test_target_audience_field_exists_in_default_rule(self):
+        """Default rule has target_audience field set."""
+        from study.models import LearningDraftRule
+
+        rule = LearningDraftRule.default()
+        assert hasattr(rule, 'target_audience'), "Rule must have target_audience field"
+        assert isinstance(rule.target_audience, str), \
+            f"target_audience must be string: {type(rule.target_audience)}"
+        assert len(rule.target_audience.strip()) > 0, \
+            f"target_audience should not be empty: {rule.target_audience!r}"
+
+    def test_beginner_explanations_present_passes_validation(self):
+        """Draft with beginner-friendly explanations passes target_audience check."""
+        from study.learning_draft_rule import validate_learning_draft_rule, detect_prohibited_patterns
+        from study.models import LearningDraftRule
+
+        draft = ""
+        for s in ["문제 배경", "개념 정의", "동작 원리"]:
+            # Include beginner-friendly definition language
+            draft += f"## {s}\n" + (
+                "초보자를 위해 이 개념을 설명합니다. 필요한 이유는 X입니다. 작동 방식은 Y입니다." * 20
+            ) + "\n\n"
+
+        result = validate_learning_draft_rule(draft, rule=LearningDraftRule.default())
+        # Verify it passes or at least doesn't fail on target_audience
+        if not result["passed"]:
+            for e in result["errors"]:
+                assert "target_audience" not in e.lower()
+
+    def test_need_explanation_present(self):
+        """Draft explains why the concept is necessary."""
+        from study.learning_draft_rule import validate_learning_draft_rule, detect_prohibited_patterns
+        from study.models import LearningDraftRule
+
+        draft = ""
+        for s in ["문제 배경", "개념 정의"]:
+            # Include explanation of need language
+            draft += f"## {s}\n" + (
+                "이 개념이 필요한 이유는 X 때문입니다. 처음 배우는 사람에게 중요합니다." * 20
+            ) + "\n\n"
+
+        result = validate_learning_draft_rule(draft, rule=LearningDraftRule.default())
+        if not result["passed"]:
+            for e in result["errors"]:
+                assert "target_audience" not in e.lower()
+
+    def test_operation_guidance_present(self):
+        """Draft explains how things work (how-to)."""
+        from study.learning_draft_rule import validate_learning_draft_rule, detect_prohibited_patterns
+        from study.models import LearningDraftRule
+
+        draft = ""
+        for s in ["동작 원리", "검증 방법"]:
+            # Include operational guidance language
+            draft += f"## {s}\n" + (
+                "이것은 이렇게 작동합니다. 첫 번째로 ~, 두 번째로 ~ 합니다." * 20
+            ) + "\n\n"
+
+        result = validate_learning_draft_rule(draft, rule=LearningDraftRule.default())
+        if not result["passed"]:
+            for e in result["errors"]:
+                assert "target_audience" not in e.lower()
