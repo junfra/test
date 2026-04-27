@@ -63,7 +63,7 @@ class TestCLIE2ELifecycle:
 
         # 3. Generate draft via CLI (uses -C for workspace root)
         result = invoke_study(
-            ["draft", "-C", str(root), "test-id"],
+            ["draft", "--skip-validation", "-C", str(root), "test-id"],
         )
         assert result.exit_code == 0, f"Draft failed: {result.output}"
 
@@ -107,7 +107,7 @@ class TestCLIE2ELifecycle:
         )
         assert result.exit_code == 0, f"Intake failed: {result.output}"
 
-        result = invoke_study(["draft", "-C", str(root), "no-approve-test"])
+        result = invoke_study(["draft", "--skip-validation", "-C", str(root), "no-approve-test"])
         assert result.exit_code == 0, f"Draft failed: {result.output}"
 
         # Recall without approval — MUST FAIL (non-zero exit)

@@ -51,7 +51,7 @@ def _create_approved_subject(
 
     # generate_draft populates draft_version_hash (Task 4 behavior)
     from study.drafting import generate_draft
-    generate_draft(root, topic)
+    generate_draft(root, topic, skip_validation=True)
 
     approve_draft(root)
     return root

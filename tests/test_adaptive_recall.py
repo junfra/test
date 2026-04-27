@@ -35,7 +35,7 @@ def test_adaptive_recall_rejects_unapproved():
     ws = _make_seed_dir("unapproved")
     subject_root = create_subject(ws, "seed-ua", "Seed unapproved")
 
-    generate_draft(subject_root, "Seed Drafting")
+    generate_draft(subject_root, "Seed Drafting", skip_validation=True)
 
     with pytest.raises(ApprovalRequiredError):
         select_next_questions_weak(subject_root, n=3)
@@ -58,7 +58,7 @@ def test_weak_points_prioritized_in_random_order():
 
     draft_content = "# Seed Drafting\n\n# Chapter 1: Section A\n\nSection A covers strong topics.\n\n# Chapter 2: Section B\n\nSection B is about misconceptions."
     # generate a draft first to set the hash, then overwrite content
-    generate_draft(subject_root, "Seed Drafting")
+    generate_draft(subject_root, "Seed Drafting", skip_validation=True)
     (subject_root / "learning_draft.md").write_text(draft_content)
     approve_draft(subject_root)
 

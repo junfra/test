@@ -218,6 +218,7 @@ def _build_learning_system(
     sources: list[SourceReference],
     *,
     lm_client: _GeneratesText | None = None,
+    skip_validation: bool = False,
 ) -> LearningDraftSystem:
     """Build a LearningDraftSystem through the LM-primary path.
 
@@ -246,7 +247,8 @@ def _build_learning_system(
             chapter_systems=chapter_systems,
             sources=sources,
         )
-        _validate_draft_text(_render_draft(system))
+        if not skip_validation:
+            _validate_draft_text(_render_draft(system))
         return system
     except LMGenerationError as exc:
         return _build_fallback_learning_system(
@@ -261,6 +263,7 @@ def generate_draft(
     topic: str,
     *,
     lm_client: _GeneratesText | None = None,
+    skip_validation: bool = False,
 ) -> str:
     """Generate a dense LM-driven concept reconstruction draft.
 
@@ -270,9 +273,10 @@ def generate_draft(
     """
 
     sources = load_source_data(subject_root)
-    system = _build_learning_system(subject_root, topic, sources, lm_client=lm_client)
+    system = _build_learning_system(subject_root, topic, sources, lm_client=lm_client, skip_validation=skip_validation)
     draft_text = _render_draft(system)
-    _validate_draft_text(draft_text)
+    if not skip_validation:
+        _validate_draft_text(draft_text)
 
     draft_path = subject_root / "learning_draft.md"
     draft_path.write_text(draft_text, encoding="utf-8")

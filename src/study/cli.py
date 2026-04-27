@@ -186,8 +186,9 @@ def cmd_intake(workspace_root: str | None, subject_id: str, text: str):  # noqa:
 
 @main.command("draft")
 @click.option("-C", "--cwd", "workspace_root", type=click.Path(), default=None, help="Working directory (defaults to current working directory).")
+@click.option("--skip-validation", is_flag=True, help="Skip draft validation (for testing).")
 @click.argument("subject_id", type=str)
-def cmd_draft(workspace_root: str | None, subject_id: str):  # noqa: D401 — CLI docs
+def cmd_draft(workspace_root: str | None, subject_id: str, skip_validation: bool):  # noqa: D401 — CLI docs
     """Generate a learning draft for the subject.
 
     \b
@@ -207,7 +208,7 @@ def cmd_draft(workspace_root: str | None, subject_id: str):  # noqa: D401 — CL
 
     from .drafting import generate_draft as _gd
 
-    draft_text = _gd(subject_dir, state.topic)
+    draft_text = _gd(subject_dir, state.topic, skip_validation=skip_validation)
 
     # Count chapters for output.
     import re

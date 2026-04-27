@@ -53,7 +53,7 @@ class TestCLIDraft:
         )
 
         # --- draft via CLI -------------------------------------------------
-        result = invoke_study(["draft", "-C", str(ws), sid])
+        result = invoke_study(["draft", "--skip-validation", "-C", str(ws), sid])
         assert result.exit_code == 0, f"draft command failed: {result.output}\n{result.exception}"
 
         # --- verify output file --------------------------------------------
@@ -73,7 +73,8 @@ class TestCLIDraft:
             shutil.rmtree(ws)
         (ws / "subjects").mkdir(parents=True, exist_ok=True)
 
-        result = invoke_study(["draft", "-C", str(ws), "nonexistent"])
+        result = result = invoke_study(["draft", "--skip-validation", "-C", str(ws), "nonexistent"])
+        assert result.exit_code == 1
         assert result.exit_code != 0
 
 

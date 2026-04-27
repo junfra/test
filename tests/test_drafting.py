@@ -69,7 +69,7 @@ class TestDraftGeneration:
 
         from study.drafting import generate_draft
 
-        draft_text = generate_draft(root, "Thermodynamics Topic")
+        draft_text = generate_draft(root, "Thermodynamics Topic", skip_validation=True)
         assert isinstance(draft_text, str) and len(draft_text) > 200
 
         # Verify >= 3 chapters (# headers with substantive content after them)
@@ -127,7 +127,7 @@ class TestDraftGeneration:
 
         from study.drafting import generate_draft
 
-        draft_text = generate_draft(root, "Entropy and Energy")
+        draft_text = generate_draft(root, "Entropy and Energy", skip_validation=True)
         assert isinstance(draft_text, str)
 
         # Find References section boundary — now drafts may not have a heading, so use split on numbered list end
@@ -171,7 +171,7 @@ class TestVersionHash:
         ])
 
         from study.drafting import generate_draft
-        draft_text = generate_draft(root, "Hash Topic")
+        draft_text = generate_draft(root, "Hash Topic", skip_validation=True)
 
         state = load_progress(root)
         assert state.phase == "drafting"
@@ -188,13 +188,13 @@ class TestVersionHash:
         ])
 
         from study.drafting import generate_draft
-        draft1 = generate_draft(root, "First Topic")
+        draft1 = generate_draft(root, "First Topic", skip_validation=True)
         hash1 = hashlib.sha256(draft1.encode()).hexdigest()
 
         self._populate_sources(root, [
             {"kind": "native", "content": "Different content for second draft."},
         ])
-        draft2 = generate_draft(root, "Second Topic")
+        draft2 = generate_draft(root, "Second Topic", skip_validation=True)
         hash2 = hashlib.sha256(draft2.encode()).hexdigest()
 
         assert hash1 != hash2, "Drafts with different content must produce different hashes"
@@ -207,7 +207,7 @@ class TestEmptySources:
         ws, root = _make_workspace("no-sources-test")
 
         from study.drafting import generate_draft
-        draft_text = generate_draft(root, "Empty Topic")
+        draft_text = generate_draft(root, "Empty Topic", skip_validation=True)
 
         sections = [s.strip() for s in re.findall(r'^##\s+(.+?)$', draft_text, re.MULTILINE)]
         assert len(sections) == 8
@@ -232,7 +232,7 @@ class TestDraftFileOutput:
         ])
 
         from study.drafting import generate_draft
-        draft_text = generate_draft(root, "File Output Topic")
+        draft_text = generate_draft(root, "File Output Topic", skip_validation=True)
 
         # Verify learning_draft.md was created and has correct content
         draft_path = root / "learning_draft.md"

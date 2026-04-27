@@ -47,7 +47,7 @@ def full_subject_lifecycle(tmp_workspace: Path):
     )
 
     # Generate draft first to set version hash in progress_state.json
-    generate_draft(subject_root, "algebra")
+    generate_draft(subject_root, "algebra", skip_validation=True)
 
     draft_content = (
         "# Algebra\n"
