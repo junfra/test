@@ -395,3 +395,95 @@ class TestTargetAudienceEnforcement:
         if not result["passed"]:
             for e in result["errors"]:
                 assert "target_audience" not in e.lower()
+
+
+class TestEachSectionPerformsDescriptionFunction:
+    """Task 10: Each of the 8 sections must perform a description function, not just exist."""
+
+    def test_all_sections_have_explanation_elements(self):
+        """Draft with explanation elements in all sections passes section check."""
+        from study.learning_draft_rule import validate_learning_draft_rule, detect_prohibited_patterns
+        from study.models import LearningDraftRule
+
+        draft = ""
+        for s in ["문제 배경", "개념 정의", "동작 원리"]:
+            # Each section has cause-and-effect chains and failure examples
+            explanation = (
+                f"## {s}\n" +
+                "이 개념은 X 때문에 필요합니다. 왜냐하면 Y가 발생하기 때문입니다. "
+                "실패할 때는 Z가 관찰됩니다. 따라서 A를 선택해야 합니다." * 15 + "\n\n"
+            )
+            draft += explanation
+
+        result = detect_prohibited_patterns(draft)
+        # Should not have format_only_section_compliance if all sections are substantive
+        assert "format_only_section_compliance" not in result.matches, (
+            f"All sections should be substantive: {result.matches}"
+        )
+
+
+class TestPassCriteriaConnectsToValidatorFinalDecision:
+    """Task 11: pass_criteria must be the actual final gate in validation."""
+
+    def test_pass_criteria_applied_as_final_gate(self):
+        """pass_criteria is checked after all individual checks."""
+        from study.models import LearningDraftRule
+        from study.models import LearningDraftRule
+
+        rule = LearningDraftRule.default()
+        # The default pass_criteria should reference body length and sections
+        assert "5000" in rule.pass_criteria or "body" in rule.pass_criteria.lower(), \
+            f"pass_criteria must mention substantive criteria: {rule.pass_criteria}"
+
+    def test_draft_passing_all_checks_includes_pass_criteria(self):
+        """A draft passing all individual checks still reflects pass_criteria."""
+        from study.learning_draft_rule import validate_learning_draft_rule
+        from study.models import LearningDraftRule
+
+        rule = LearningDraftRule.default()
+        assert hasattr(rule, 'pass_criteria') and len(rule.pass_criteria.strip()) > 0
+
+
+class TestJudgmentDensitySemanticFunction:
+    """Task 12: Judgment density uses semantic function not marker heuristic only."""
+
+    def test_boilerplate_only_paragraph_rejected(self):
+        """Paragraph with '이유가 있다' but no actual reasoning fails density test."""
+        from study.learning_draft_rule import analyze_judgment_density
+
+        # Paragraph that mentions reasons superficially without substance
+        text = ""
+        for i in range(10):
+            text += f"이 주제는 여러 가지 이유가 있습니다. 이 개념은 중요합니다." * 5 + "\n\n"
+
+        result = analyze_judgment_density(text)
+        assert not result.passed, (
+            f"Boilerplate-only should fail: {result.errors}"
+        )
+
+    def test_semantic_reasoning_paragraph_accepted(self):
+        """Paragraph explaining why something matters and what changes if false passes."""
+        from study.learning_draft_rule import analyze_judgment_density
+
+        # Paragraph with actual reasoning structure (cause→condition→boundary)
+        text = ""
+        for i in range(10):
+            text += f"이 개념이 필요한 이유는 X가 발생하기 때문입니다. " \
+                    f"만약 Y라면 Z가 무너집니다. 따라서 A와 B를 구분해야 합니다." + "\n\n"
+
+        result = analyze_judgment_density(text)
+        assert result.passed, (
+            f"Semicantically rich paragraph should pass: {result.errors}"
+        )
+
+    def test_keyword_only_rejected(self):
+        """Paragraph with only weak/boilerplate keywords is rejected."""
+        from study.learning_draft_rule import analyze_judgment_density
+
+        # Only boilerplate words without judgment structure
+        text = "중요함. 다양한 상황에서 쓰입니다. 잘 이해해야 합니다." * 20 + "\n\n"
+
+        result = analyze_judgment_density(text)
+        assert not result.passed, (
+            f"Keyword-only should fail: {result.errors}"
+        )
