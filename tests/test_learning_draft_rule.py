@@ -265,3 +265,66 @@ class TestSectionTitleOnlyComplianceCannotPass:
         assert "thin_section_body" not in result.matches, (
             f"Sufficient content should NOT trigger thin-section: {result.matches}"
         )
+
+
+class TestSubstantiveBodyLengthCalculator:
+    """Task 8: count_substantive_body_chars excludes titles, TOC, boilerplate."""
+
+    def test_excludes_markdown_titles(self):
+        """Headings (## ...) should NOT be counted in body chars."""
+        from study.learning_draft_rule import count_substantive_body_chars
+
+        text = "## 문제 배경\nThis is the content.\n" * 5 + "\n"
+        body_len = count_substantive_body_chars(text)
+        # The ## headers should be stripped; only "This is the content." counts per line
+        assert body_len < len(text), (
+            f"Body length ({body_len}) must be less than total text ({len(text)}) after stripping headings"
+        )
+
+    def test_excludes_toc_blocks(self):
+        """TOC blocks should NOT count toward body chars."""
+        from study.learning_draft_rule import count_substantive_body_chars
+
+        text = "## 목차\n1. Item\n2. Item\n3. Item\n" + "Substantial content here." * 10 + "\n"
+        body_len = count_substantive_body_chars(text)
+        # Should be less than raw length due to TOC stripping
+        assert body_len < len(text), (
+            f"Body length ({body_len}) must exclude TOC block from total ({len(text)})"
+        )
+
+    def test_excludes_references_section(self):
+        """References section should NOT count toward body chars."""
+        from study.learning_draft_rule import count_substantive_body_chars
+
+        text = "## References\n1. Source A\n2. Source B\n" + "Real content." * 10 + "\n"
+        body_len = count_substantive_body_chars(text)
+        assert body_len < len(text), (
+            f"Body length ({body_len}) must exclude references from total ({len(text)})"
+        )
+
+    def test_dedupe_repeated_boilerplate(self):
+        """Repeated boilerplate lines are deduplicated."""
+        from study.learning_draft_rule import count_substantive_body_chars, _dedupe_repeated_lines
+
+        text = "\n".join(["This is a repeated line that appears many times."] * 10) + "\n"
+        body_len = count_substantive_body_chars(text)
+        deduped_text = _dedupe_repeated_lines(text)
+        assert len(deduped_text) < len(text), (
+            f"Deduplication should reduce length: {len(text)} -> {len(deduped_text)}"
+        )
+
+    def test_draft_with_5000_including_headers_passes_after_subtraction(self):
+        """A draft with 5000+ chars including headers passes after body extraction."""
+        from study.learning_draft_rule import count_substantive_body_chars, validate_learning_draft_rule
+        from study.models import LearningDraftRule
+
+        # Build a draft that has substantial content but also header lines
+        draft = ""
+        for s in ["문제 배경", "개념 정의", "동작 원리"]:
+            draft += f"## {s}\n" + "This is substantive body text." * 100 + "\n\n"
+
+        body_len = count_substantive_body_chars(draft)
+        # Body length should be significantly less than total due to heading stripping
+        assert body_len < len(draft), (
+            f"Body ({body_len}) must be less than raw draft ({len(draft)}) after header stripping"
+        )
