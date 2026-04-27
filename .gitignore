@@ -11,3 +11,5 @@ htmlcov/
 .DS_Store
 .env
 .worktree/
+.git/
+oracle_final_capture_*
