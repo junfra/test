@@ -88,3 +88,132 @@ class TestLearningDraftRuleOntology:
         pc = rule.pass_criteria
         assert isinstance(pc, str) and len(pc.strip()) > 0, \
             f"pass_criteria should be non-empty: {pc!r}"
+
+
+class TestRequiredFunctionsEnforcedAsContract:
+    """Task 6: required_functions must be enforced at generation level."""
+
+    def test_paragraph_without_judgment_markers_fails_density(self):
+        """Paragraphs with only boilerplate words (no judgment structure) rejected."""
+        from study.learning_draft_rule import analyze_judgment_density
+
+        # A paragraph that has no judgment function markers
+        text = "The topic is important. This concept matters in various contexts." * 10 + "\n\n"
+        result = analyze_judgment_density(text)
+
+        assert not result.passed, \
+            f"Boilerplate-only paragraph should fail density check: {result.errors}"
+
+
+class TestProhibitedPatternsEnforcedAsContract:
+    """Task 6: all 7 prohibited patterns must have concrete detector logic."""
+
+    def test_template_placeholder_detected(self):
+        from study.learning_draft_rule import detect_prohibited_patterns
+
+        text = "Insert topic [Topic] {{topic}}"
+        result = detect_prohibited_patterns(text)
+        assert "template_placeholder" in result.matches,             f"Template placeholder should be detected: {result.matches}"
+
+    def test_generic_importance_claim_detected_at_threshold(self):
+        from study.learning_draft_rule import detect_prohibited_patterns
+
+        text = (
+            "이 개념은 매우 중요하다. 잘 이해해야 한다. "
+            "이것은 매우 중요하다. 다양한 상황에서 활용된다." * 3 + "\n"
+        )
+        result = detect_prohibited_patterns(text)
+        assert "generic_importance_claim" in result.matches,             f"Generic importance claims should be detected: {result.matches}"
+
+    def test_procedure_without_causality_detected(self):
+        from study.learning_draft_rule import detect_prohibited_patterns
+
+        text = "먼저 A를 한다. 다음 B를 한다. 마지막으로 C를 한다."
+        result = detect_prohibited_patterns(text)
+        assert "procedure_without_causality" in result.matches, \
+            f"Procedure without causality should be detected: {result.matches}"
+
+    def test_repeated_boilerplate_detected(self):
+        from study.learning_draft_rule import detect_prohibited_patterns
+
+        text = "\n".join(["Same boilerplate line repeated three times for testing."] * 5) + "\n"
+        result = detect_prohibited_patterns(text)
+        assert "repeated_boilerplate" in result.matches, \
+            f"Repeated boilerplate should be detected: {result.matches}"
+
+    def test_thin_section_body_detected(self):
+        from study.learning_draft_rule import detect_prohibited_patterns
+
+        text = ""
+        for s in ["문제 배경", "개념 정의", "동작 원리", "핵심 판단 기준"]:
+            text += f"## {s}\nShort." + "\n\n"
+        result = detect_prohibited_patterns(text)
+        assert "thin_section_body" in result.matches, \
+            f"Thin section body should be detected: {result.matches}"
+
+    def test_unsupported_advantage_praise_detected(self):
+        from study.learning_draft_rule import detect_prohibited_patterns
+
+        text = (
+            "이 기술은 장점이 매우 많다. 다른 기술보다 우수하다. "
+            "뛰어나다. 강점이 있다."  # multiple advantage claims without evidence
+        )
+        result = detect_prohibited_patterns(text)
+        assert "unsupported_advantage_praise" in result.matches, \
+            f"Unsupported advantage praise should be detected: {result.matches}"
+
+    def test_procedure_with_causality_accepted(self):
+        """Procedure with causal explanation is NOT a prohibited pattern."""
+        from study.learning_draft_rule import detect_prohibited_patterns
+
+        text = (
+            "먼저 A를 한다. 왜냐하면 B 때문이다. 다음 C를 하고, 따라서 D가 된다."
+        )
+        result = detect_prohibited_patterns(text)
+        assert "procedure_without_causality" not in result.matches, \
+            f"Causal procedure should NOT be detected: {result.matches}"
+
+    def test_all_seven_patterns_exist_in_seed(self):
+        """Seed contract requires all 7 patterns; none may be missing."""
+        from study.models import LearningDraftRule
+
+        rule = LearningDraftRule.default()
+        expected = frozenset([
+            "template_placeholder",
+            "format_only_section_compliance",
+            "generic_importance_claim",
+            "repeated_boilerplate",
+            "thin_section_body",
+            "unsupported_advantage_praise",
+            "procedure_without_causality",
+        ])
+        actual = frozenset(rule.prohibited_patterns)
+        assert actual == expected, \
+            f"prohibited_patterns must match seed: {sorted(actual)} vs {sorted(expected)}"
+
+
+class TestDensityTestsEnforcedAsContract:
+    """Task 6: density_tests field must drive real enforcement."""
+
+    def test_keyword_only_paragraph_rejected(self):
+        """Paragraph with only weak/boilerplate words is rejected by density analysis."""
+        from study.learning_draft_rule import analyze_judgment_density, _extract_paragraphs
+
+        text = (
+            "The topic matters. This concept is important." * 10 + "\n\n"
+        )
+        result = analyze_judgment_density(text)
+        assert not result.passed, \
+            f"Keyword-only paragraph should be rejected: {result.errors}"
+
+    def test_strong_paragraph_accepted(self):
+        """Paragraphs with Korean structural markers and judgment patterns pass."""
+        from study.learning_draft_rule import analyze_judgment_density
+
+        text = ""
+        for i in range(10):
+            text += f"이 개념은 왜 필요한지 이해하려면, 실패하는 이유와 검증 방법을 알아야 한다. " \
+                    f"원인과 결과, 조건과 경계를 구분해야 한다." + "\n\n"
+        result = analyze_judgment_density(text)
+        assert result.passed, \
+            f"Strong paragraphs should pass density check: {result.errors}"
