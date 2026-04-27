@@ -217,3 +217,51 @@ class TestDensityTestsEnforcedAsContract:
         result = analyze_judgment_density(text)
         assert result.passed, \
             f"Strong paragraphs should pass density check: {result.errors}"
+
+
+class TestSectionTitleOnlyComplianceCannotPass:
+    """Task 7: Draft with all section titles but insufficient body must fail."""
+
+    def test_all_headers_with_short_body_fails_validation(self):
+        """Draft with 8 correct headers each having <50 chars of body -> FAILS."""
+        from study.learning_draft_rule import validate_learning_draft_rule
+        from study.models import LearningDraftRule
+
+        draft = ""
+        for s in ["문제 배경", "개념 정의", "동작 원리", "핵심 판단 기준",
+                  "실패 사례", "검증 방법", "유사 개념 비교", "복습 질문"]:
+            draft += f"## {s}\nShort." + "\n\n"
+
+        rule = LearningDraftRule.default()
+        result = validate_learning_draft_rule(draft, rule=rule)
+
+        # Must fail -- section-title-only compliance is NOT sufficient
+        assert not result["passed"], (
+            "Title-only draft should FAIL: " + str(result['errors'])
+        )
+
+    def test_validate_draft_text_raises_on_title_only(self):
+        """_validate_draft_text must raise DraftValidationError on title-only."""
+        from study.drafting import _validate_draft_text; from study.learning_draft_rule import DraftValidationError
+        from study.models import LearningDraftRule
+
+        draft = ""
+        for s in ["문제 배경", "개념 정의", "동작 원리"]:
+            draft += f"## {s}\nShort." + "\n\n"
+
+        with pytest.raises(DraftValidationError):
+            _validate_draft_text(draft, learning_draft_rule=LearningDraftRule.default())
+
+    def test_substantive_content_passes_title_check(self):
+        """Draft with actual content in each section does NOT trigger thin-section error."""
+        from study.learning_draft_rule import validate_learning_draft_rule, detect_prohibited_patterns
+        from study.models import LearningDraftRule
+
+        draft = ""
+        for s in ["문제 배경", "개념 정의", "동작 원리"]:
+            draft += f"## {s}\nThis section explains why this concept matters because the mechanism operates through failure modes." * 5 + "\n\n"
+
+        result = detect_prohibited_patterns(draft)
+        assert "thin_section_body" not in result.matches, (
+            f"Sufficient content should NOT trigger thin-section: {result.matches}"
+        )
