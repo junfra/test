@@ -1,0 +1,127 @@
+goal: >
+  Build an MD-based Codex skill harness system ("recall-system") that routes
+  natural-language user requests into learning, study, and recall sub-skills and:
+  (1) generates deep, high-density learning materials (30,000+ characters of pure text)
+  with a fixed 7-chapter structure (탄생배경 → 정의 → 하위개념 → 관계도 → 사례 → 오해 → 회상키포인트),
+  recall questions per chapter, and inline retrieval points, using LLM knowledge + web search
+  (Oracle Browser default, built-in web search option) with user-provided materials as optional input,
+  (2) provides an interactive study session where the user can ask questions, request
+  explanations, and verify understanding (MVP v1: simple material-grounded Q&A;
+  richer explanation, analogy, and verification are allowed but not required beyond Q&A scope),
+  and
+  (3) runs structured recall sessions (free recall → analysis → scaffolded questions →
+  synthesis check) with 5-level scoring, weak-point tracking, hint → retry → answer+explanation
+  feedback loop, review queue persistence, and priority-based spaced repetition to strengthen
+  long-term memory through retrieval practice.
+
+task_type: skill-contract-docs
+
+constraints:
+  - "MD-based Codex skill harness, not a command-line interface: recall-system/SKILL.md is the natural-language router, and it routes user intent to recall-system-learn/SKILL.md, recall-system-study/SKILL.md, or recall-system-recall/SKILL.md."
+  - "All user-facing operation is natural-language-based; no CLI commands, flags, arguments, or memorized syntax are required."
+  - "Primary target user: first-time learner (처음 학습자)"
+  - "Project root: /home/user01/project/recall-system/"
+  - "Learning materials stored under: /home/user01/project/recall-system/subject/<topic_slug>/index.md"
+  - "Pure text minimum 30,000 characters per learning material"
+  - "Korean language as default output language"
+  - "Learning material structure: fixed 7 chapters (1.탄생배경 2.정의 3.하위개념 4.관계도 5.사례 6.오해 7.회상키포인트)"
+  - "Each chapter must end with recall questions (fact/comparison/understanding mixed)"
+  - "Inline retrieval points embedded in chapter body"
+  - "References listed only at the end of the document (말미에만 표기)"
+  - "Web search via Oracle Browser (default) or built-in web search (option)"
+  - "User-provided materials (PDF, documents, links) accepted as optional input"
+  - "Source conflict resolution: official/primary sources first → recency check → uncertainty marked (단정 금지) → recorded in references"
+  - "No external database; file-based persistence only"
+  - "No dashboard/statistics, no multi-user, no sharing/distribution, no voice interface"
+  - "SKILL.md files must define safe file-write behavior as an agent execution contract: create complete replacement content before changing the target file, preserve recoverable prior content when possible, and never frame this as a required Python helper/API implementation."
+  - "SKILL.md files must define JSON/state recovery behavior as an agent execution contract: when state files are unreadable or corrupted, recover from available .bak evidence when possible, otherwise reinitialize with explicit user-facing notice."
+  - "SKILL.md files must define single-operation coordination as an agent execution contract: for the same topic/session, the agent must avoid overlapping write operations and must expose clear recovery behavior if work appears already in progress."
+  - "SKILL.md files must define topic_slug safety as an agent execution contract: derive topic_slug from natural-language topics by removing path separators, parent-directory traversal, leading/trailing whitespace, and control characters before using file paths."
+  - "All paths restricted to /home/user01/project/recall-system/ subtree"
+
+acceptance_criteria:
+  - "User can say 'learn this topic' in natural language and the system generates a 30,000+ char learning material with the fixed 7 chapters (탄생배경/정의/하위개념/관계도/사례/오해/회상키포인트), recall questions per chapter, and inline retrieval points"
+  - "User can say 'study this' and the agent offers material-grounded Q&A (MVP v1: simple Q&A scope; richer explanation, analogy, and verification allowed but not required). Study mode defaults to the user reading subject/<topic_slug>/index.md directly; the agent provides Q&A only when the user asks for help."
+  - "User can say 'recall this' and the system runs a 4-stage recall session: free recall → analysis → scaffolded questions → synthesis check"
+  - "During recall, when the user answers incorrectly or weakly: hint → retry → correct answer with explanation → register in review queue"
+  - "Recall session scores answers on a 5-level scale (perfect / mostly correct / half correct / correct after hint / wrong)"
+  - "Wrong or weak answers are registered in a review queue with fields: concept, question, failure_reason, last_score, next_priority, last_seen, due_hint"
+  - "Next recall session prioritizes previously weak items using combined recency + failure-count weighting; exact sorting heuristic is agent-discretionary in MVP v1"
+  - "Recall session data persists across sessions under subject/<topic_slug>/ directory"
+  - "Natural language router correctly classifies intent into learn/study/recall/unknown using keyword matching; confidence threshold is agent-discretionary"
+  - "When intent confidence is low, router asks once for clarification"
+  - "All 12 confirmed boundary conditions are handled with explicit user-facing behavior and state-handling rules: no input → show example commands; intent unclear → ask once; no topic → show recent or list topics; no existing material + recall request → suggest learn first; existing index.md + learn request → ask overwrite/regenerate/keep; web search failure → log failure, proceed with LLM knowledge; 30,000-char underrun → save as draft_failed.md with reason; user says '모르겠어' during recall → hint → retry → answer+explanation → queue; session interruption mid-recall → save as partial session; empty review queue → start with index.md default recall questions; corrupted state files → restore from .bak or reinitialize; multiple topic candidates → prefer recent, list if ambiguous"
+
+ontology_schema:
+  name: RecallSystem
+  description: >
+    Domain model for the recall-system CLI learning and recall platform.
+    Covers learning material storage, recall session state, review queue,
+    and study notes.
+  fields:
+    - name: subject
+      type: string
+      description: "Topic slug for the learning subject"
+      required: true
+    - name: index_md
+      type: string
+      description: "Path to the main learning material file: subject/<topic_slug>/index.md"
+      required: true
+    - name: metadata_json
+      type: string
+      description: "Path to subject metadata: subject/<topic_slug>/metadata.json"
+      required: true
+    - name: recall_queue_json
+      type: string
+      description: "Path to review queue: subject/<topic_slug>/recall_queue.json"
+      required: true
+    - name: recall_sessions_dir
+      type: string
+      description: "Directory for recall session logs: subject/<topic_slug>/recall_sessions/"
+      required: false
+    - name: study_notes_json
+      type: string
+      description: "Path to study notes: subject/<topic_slug>/study_notes.json"
+      required: false
+    - name: system_state_json
+      type: string
+      description: "Path to system state: system_state.json"
+      required: false
+    - name: recall_queue_entry
+      type: object
+      description: "Review queue entry with fields: concept, question, failure_reason, last_score, next_priority, last_seen, due_hint"
+      required: false
+
+evaluation_principles:
+  - name: completeness
+    description: "All acceptance criteria are satisfied with direct evidence"
+    weight: 1.0
+  - name: depth_and_density
+    description: "Learning materials achieve genuine conceptual depth (etymology/foundation of concepts, not surface summaries) and meet 30,000+ character minimum with fixed 7-chapter structure"
+    weight: 1.0
+  - name: recall_effectiveness
+    description: "Recall sessions follow the 4-stage pipeline (free recall → analysis → scaffolded questions → synthesis check) with hint→retry→answer+explanation feedback loop and correctly prioritize weak points from the review queue"
+    weight: 0.9
+  - name: natural_language_ux
+    description: "All interactions are natural-language-based; the user never needs to memorize CLI commands"
+    weight: 0.8
+  - name: edge_case_resilience
+    description: "System handles all 12 confirmed boundary conditions without crashing or producing incorrect state"
+    weight: 0.7
+
+exit_conditions:
+  - name: all_criteria_pass
+    description: "All acceptance criteria pass verification"
+    criteria: "100% of acceptance criteria verified with direct evidence"
+  - name: mvp_v1_scope_met
+    description: "MVP v1 scope is complete: natural language router, learn (index.md generation with fixed 7 chapters + recall questions + retrieval points), recall (free recall → analysis → scaffolded questions → synthesis check with hint→retry→answer+explanation loop), recall_queue.json persistence, priority-based re-asking of weak items. Study is simple material-grounded Q&A only."
+    criteria: "MVP v1 scope items all verified"
+  - name: user_declares_done
+    description: "The user explicitly states the work is complete for their current needs"
+    criteria: "User confirms completion"
+
+metadata:
+  seed_id: "seed_recall_system_20260427"
+  version: "1.0.0"
+  ambiguity_score: 0.12
+  interview_id: "study-recall-20260427"
