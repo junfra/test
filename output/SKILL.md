@@ -14,7 +14,7 @@ ORACLE_CLI="/home/user01/project/oracle_new/.venv/bin/oracle-plus"
 ## Standard Flow
 
 ```bash
-"$ORACLE_CLI" --engine browser --browser-model-strategy current --wait --slug "example" --write-output /tmp/oracle_final_capture.md -p "Prompt"
+"$ORACLE_CLI" --engine browser --browser-model-strategy ignore --wait --slug "example" --write-output /tmp/oracle_final_capture.md -p "Prompt"
 ```
 
 ## Prompt Input
@@ -35,7 +35,7 @@ Requirements:
 - Do not invent unsupported behavior.
 EOF
 
-"$ORACLE_CLI"   --engine browser   --browser-model-strategy current   --wait   --slug "example-file-prompt"   --write-output /tmp/oracle_final_capture.md   --prompt-file /tmp/oracle_prompt.md
+"$ORACLE_CLI"   --engine browser   --browser-model-strategy ignore   --wait   --slug "example-file-prompt"   --write-output /tmp/oracle_final_capture.md   --prompt-file /tmp/oracle_prompt.md
 ```
 
 `--prompt-file` reads the prompt text from the given local file path and sends that file content as the Oracle prompt.
