@@ -595,3 +595,64 @@ receipt_next_action: <one-line next action, or "none">
 
 def inject_session_contract(prompt: str) -> str:
     return f"{SESSION_CONTRACT.rstrip()}\n\n--- USER PROMPT ---\n\n{prompt}"
+
+
+# ── SESSION RECEIPT PARSER ──────────────────────────────────────────────
+
+SESSION_RECEIPT_RE = re.compile(
+    r"<<<SESSION_RECEIPT\s*\n(?P<body>.*?)\n>>>\s*\Z",
+    re.DOTALL,
+)
+
+VALID_RECEIPT_STATUS = {"complete", "incomplete"}
+VALID_RECEIPT_OUTCOME = {
+    "success", "failure", "needs_followup", "blocked", "unknown"
+}
+RECEIPT_FIELDS = ("receipt_status", "receipt_outcome", "receipt_summary", "receipt_next_action")
+
+
+@dataclass(frozen=True)
+class SessionReceipt:
+    receipt_status: str
+    receipt_outcome: str
+    receipt_summary: str
+    receipt_next_action: str
+    strict_failure_opt_in: bool = False
+    parse_warning: str | None = None
+
+    @property
+    def should_fail_strictly(self) -> bool:
+        return self.strict_failure_opt_in and self.receipt_status == "incomplete"
+
+
+class OracleSessionReceiptError(RuntimeError):
+    pass
+
+
+def _warning_receipt(reason, *, strict_failure_opt_in=False):
+    return SessionReceipt(
+        receipt_status="incomplete", receipt_outcome="unknown",
+        receipt_summary=f"SESSION RECEIPT warning: {reason}",
+        receipt_next_action="review_output_and_decide_retry_or_followup",
+        strict_failure_opt_in=strict_failure_opt_in, parse_warning=reason)
+
+
+def parse_session_receipt(captured_output, *, strict_failure_opt_in=False):
+    match = SESSION_RECEIPT_RE.search(captured_output or "")
+    if not match:
+        return _warning_receipt("missing receipt", strict_failure_opt_in=strict_failure_opt_in)
+    values = {}
+    for line in match.group("body").splitlines():
+        line = line.strip()
+        if ":" not in line:
+            continue
+        k, v = line.split(":", 1)
+        if k.strip() in RECEIPT_FIELDS:
+            values[k.strip()] = v.strip()
+    missing = [f for f in RECEIPT_FIELDS if not values.get(f)]
+    if missing:
+        return _warning_receipt(f"missing fields: {', '.join(missing)}")
+    return SessionReceipt(
+        **{k: values[k] for k in RECEIPT_FIELDS},
+        strict_failure_opt_in=strict_failure_opt_in,
+    )
