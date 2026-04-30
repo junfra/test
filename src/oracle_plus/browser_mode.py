@@ -425,6 +425,7 @@ def run_browser_with_busy_fallback(
     remote_host_base: str | None = None,
     remote_token: str | None = None,
     session_slug: str | None = None,
+    _prompt: str | None = None,
 ) -> int:
     session_slug = _sanitize_slug(session_slug or "oracle-run")
     remote_token = remote_token or config.get_remote_token()
@@ -434,7 +435,7 @@ def run_browser_with_busy_fallback(
         return run_browser_mode(
             url=url,
             port=int(remote_host_base.rsplit(":", 1)[1]),
-            passthrough=passthrough,
+            passthrough=_clean_passthrough if _tmp_prompt_file else passthrough,
             oracle_bin=oracle_bin,
             host_ip=host_ip,
             remote_host=remote_host_base,
@@ -444,6 +445,27 @@ def run_browser_with_busy_fallback(
 
     if remote_host_base:
         host_ip = remote_host_base
+
+    # Inject session contract into prompt if provided (for accountability path)
+    _prompt_injected = _prompt
+    _tmp_prompt_file: Path | None = None
+    if _prompt:
+        # Strip existing -p/--prompt flags to avoid duplicate prompts
+        _clean_passthrough = tuple(
+            a for i, a in enumerate(passthrough)
+            if not (a == "-p" or a == "--prompt") and not (i > 0 and passthrough[i-1] in {"-p", "--prompt"})
+        )
+        # Remove --prompt-file references too
+        _clean_passthrough = tuple(
+            a for i, a in enumerate(_clean_passthrough)
+            if not (a == "--prompt-file" or a.startswith("--prompt-file=")) and not (i > 0 and _clean_passthrough[i-1] == "--prompt-file")
+        )
+        import tempfile as _tf
+        _fd, _fp = _tf.mkstemp(suffix=".md", prefix=f"oracle_prompt_{session_slug}_")
+        os.close(_fd)
+        Path(_fp).write_text(inject_session_contract(_prompt), encoding="utf-8")
+        _tmp_prompt_file = Path(_fp)
+        _clean_passthrough = (_clean_passthrough or ()) + ("--prompt-file", _fp)
 
     initialize_run_state(session_slug, host_ip, ",".join(map(str, ports)), base_dir=config.cache_root)
     last_error: int | None = None
@@ -471,7 +493,7 @@ def run_browser_with_busy_fallback(
             output = run_browser_mode(
                 url=url,
                 port=port,
-                passthrough=passthrough,
+                passthrough=_clean_passthrough if _tmp_prompt_file else passthrough,
                 oracle_bin=oracle_bin,
                 host_ip=host_ip,
                 remote_host=remote_host,
@@ -537,6 +559,9 @@ def run_browser_cli(argv: list[str]) -> int:
     effective_remote_host, auto_select_enabled, forwarded = _resolve_effective_remote_host(argv)
     codex_url = get_codex_url()
 
+    # Extract prompt from normalized args (always -p "content" after normalization)
+    cli_prompt: str | None = _extract_flag_value("-p", argv) or _extract_flag_value("--prompt", argv)
+
     if auto_select_enabled:
         host_base = effective_remote_host
         if host_base is None:
@@ -549,6 +574,7 @@ def run_browser_cli(argv: list[str]) -> int:
             remote_host_base=effective_remote_host,
             remote_token=remote_token,
             session_slug=session_slug,
+            _prompt=cli_prompt,
         )
 
     # Fixed host:port path — route through accountability wrapper
@@ -562,31 +588,9 @@ def run_browser_cli(argv: list[str]) -> int:
         codex_project_url=codex_url,
     )
 
-    # Extract prompt for accountability injection
-    prompt = _extract_flag_value("-p", forwarded_args) or _extract_flag_value("--prompt", forwarded_args)
-    if not prompt:
-        # Look for --prompt-file and read its content
-        prompt_file = None
-        idx = 0
-        items = list(forwarded_args)
-        while idx < len(items):
-            arg = items[idx]
-            if arg == "--prompt-file":
-                prompt_file = items[idx + 1]
-                break
-            if arg.startswith("--prompt-file="):
-                prompt_file = arg.split("=", 1)[1]
-                break
-            idx += 1
-        if prompt_file:
-            try:
-                prompt = Path(prompt_file).read_text(encoding="utf-8")
-            except OSError:
-                pass
-
     # Inject session contract into prompt and execute via accountability wrapper
-    if prompt:
-        injected_prompt = inject_session_contract(prompt)
+    if cli_prompt:
+        injected_prompt = inject_session_contract(cli_prompt)
         return run_browser_mode_session(
             prompt=injected_prompt,
             url=effective_remote_host or "",
