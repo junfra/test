@@ -13,7 +13,7 @@ from oracle_plus import config
 from oracle_plus.host import detect_host_ip
 from oracle_plus.oracle_resolver import resolve_oracle_bin, resolve_oracle_command
 from oracle_plus.ports import LockBusyError, PortLock, acquire_port_lock, build_candidate_ports, probe_port
-from oracle_plus.run_state import initialize_run_state, record_run_state, _sanitize_slug, record_session_receipt, record_session_receipt
+from oracle_plus.run_state import initialize_run_state, record_run_state, _sanitize_slug, record_session_receipt
 from oracle_plus.subprocess_runner import run_subprocess
 
 
