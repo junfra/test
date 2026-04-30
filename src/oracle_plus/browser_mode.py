@@ -656,3 +656,72 @@ def parse_session_receipt(captured_output, *, strict_failure_opt_in=False):
         **{k: values[k] for k in RECEIPT_FIELDS},
         strict_failure_opt_in=strict_failure_opt_in,
     )
+
+
+# ── SESSION ACCOUNTABILITY WRAPPER ──────────────────────────────────────
+
+def run_browser_mode_session(
+    prompt: str,
+    *,
+    url: str = "",
+    port: int | None = None,
+    passthrough: tuple[str, ...] = (),
+    oracle_bin: str | list[str] | None = None,
+    host_ip: str | None = None,
+    remote_host: str | None = None,
+    remote_token: str | None = None,
+    session_slug: str | None = None,
+    output_file: Path | None = None,
+    capture_output_file: Path | None = None,
+) -> int:
+    """Run browser-mode with SESSION_CONTRACT injection and receipt recording."""
+    injected_prompt = inject_session_contract(prompt)
+
+    # Build args with the injected prompt
+    args = build_oracle_args(
+        url=url,
+        port=port,
+        passthrough=passthrough,
+        remote_host=remote_host,
+        remote_token=remote_token,
+    )
+    if not _has_flag(args, "--prompt") and not any(a.startswith("--prompt=") for a in args):
+        # Inject prompt into args; prefer --prompt-file to avoid shell escaping issues
+        import tempfile as _tf
+
+        tmp_fd, tmp_path = _tf.mkstemp(suffix=".md", prefix=f"oracle_prompt_{session_slug}_")
+        os.close(tmp_fd)
+        Path(tmp_path).write_text(injected_prompt, encoding="utf-8")
+        args.extend(["--prompt-file", tmp_path])
+
+    exit_code = run_browser_mode(
+        url=url,
+        port=port,
+        passthrough=tuple(args),
+        oracle_bin=oracle_bin,
+        host_ip=host_ip,
+        remote_host=remote_host,
+        remote_token=remote_token,
+        session_slug=session_slug,
+        output_file=output_file,
+        capture_output_file=capture_output_file,
+    )
+
+    # Parse and persist receipt from captured output file
+    if output_file is not None and output_file.exists():
+        try:
+            captured = output_file.read_text(encoding="utf-8")
+            receipt = parse_session_receipt(captured)
+            record_session_receipt(
+                _sanitize_slug(session_slug or "oracle-run"),
+                receipt,
+                base_dir=config.cache_root,
+            )
+            if receipt.should_fail_strictly:
+                raise OracleSessionReceiptError(
+                    f"strict session failure: {receipt.receipt_summary}"
+                )
+        except (OSError, UnicodeDecodeError):
+            pass
+
+    return exit_code
