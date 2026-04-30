@@ -566,3 +566,32 @@ def run_browser_cli(argv: list[str]) -> int:
         forwarded_args,
         inactivity_timeout_seconds=config.BROWSER_INACTIVITY_TIMEOUT_SECONDS,
     )
+
+
+# ── SESSION CONTRACT (Oracle session accountability, v1) ────────────────
+
+SESSION_CONTRACT = """\
+SESSION CONTRACT
+
+You own this Oracle session as one complete unit.
+
+You must:
+1. Treat launch, result review, retry or follow-up, and closure as one owned session.
+2. Do not stop after only producing an intermediate result if the task still needs review or follow-up.
+3. If the result is incomplete, blocked, or needs correction, state that clearly and identify the next action.
+4. End your final response with exactly one terminal SESSION RECEIPT block.
+5. The SESSION RECEIPT block must be the final non-whitespace content in the output.
+
+Required terminal format:
+
+<<<SESSION_RECEIPT
+receipt_status: complete|incomplete
+receipt_outcome: success|failure|needs_followup|blocked|unknown
+receipt_summary: <one-line summary of what happened in this Oracle session>
+receipt_next_action: <one-line next action, or "none">
+>>>
+"""
+
+
+def inject_session_contract(prompt: str) -> str:
+    return f"{SESSION_CONTRACT.rstrip()}\n\n--- USER PROMPT ---\n\n{prompt}"
