@@ -431,24 +431,11 @@ def run_browser_with_busy_fallback(
     remote_token = remote_token or config.get_remote_token()
     host_ip = host_ip or detect_host_ip()
     ports = build_candidate_ports()
-    if remote_host_base and ":" in remote_host_base:
-        return run_browser_mode(
-            url=url,
-            port=int(remote_host_base.rsplit(":", 1)[1]),
-            passthrough=_clean_passthrough if _tmp_prompt_file else passthrough,
-            oracle_bin=oracle_bin,
-            host_ip=host_ip,
-            remote_host=remote_host_base,
-            remote_token=remote_token,
-            session_slug=session_slug,
-        )
 
-    if remote_host_base:
-        host_ip = remote_host_base
-
-    # Inject session contract into prompt if provided (for accountability path)
+    # Inject session contract into prompt if provided (for accountability path) — must happen before any run_browser_mode call
     _prompt_injected = _prompt
     _tmp_prompt_file: Path | None = None
+    _clean_passthrough: tuple[str, ...] = passthrough
     if _prompt:
         # Strip existing -p/--prompt flags to avoid duplicate prompts
         _clean_passthrough = tuple(
