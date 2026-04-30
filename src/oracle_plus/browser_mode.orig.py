@@ -13,7 +13,7 @@ from oracle_plus import config
 from oracle_plus.host import detect_host_ip
 from oracle_plus.oracle_resolver import resolve_oracle_bin, resolve_oracle_command
 from oracle_plus.ports import LockBusyError, PortLock, acquire_port_lock, build_candidate_ports, probe_port
-from oracle_plus.run_state import initialize_run_state, record_run_state, _sanitize_slug, record_session_receipt, record_session_receipt
+from oracle_plus.run_state import initialize_run_state, record_run_state, _sanitize_slug, record_session_receipt
 from oracle_plus.subprocess_runner import run_subprocess
 
 
@@ -575,10 +575,12 @@ def run_browser_cli(argv: list[str]) -> int:
         codex_project_url=codex_url,
     )
 
-    # Route through accountability wrapper (which handles contract injection + receipt parsing).
-    return run_browser_mode_session(
-        prompt=cli_prompt or "",
-        url=effective_remote_host or "",
+    # Inject session contract into prompt and execute via accountability wrapper
+    if cli_prompt:
+        injected_prompt = inject_session_contract(cli_prompt)
+        return run_browser_mode_session(
+            prompt=injected_prompt,
+            url=effective_remote_host or "",
             port=None,
             passthrough=tuple(forwarded_args),
             oracle_bin=command,
@@ -686,7 +688,7 @@ def parse_session_receipt(captured_output, *, strict_failure_opt_in=False):
 # ── SESSION ACCOUNTABILITY WRAPPER ──────────────────────────────────────
 
 def run_browser_mode_session(
-    prompt: str = "",
+    prompt: str,
     *,
     url: str = "",
     port: int | None = None,
@@ -700,7 +702,6 @@ def run_browser_mode_session(
     capture_output_file: Path | None = None,
 ) -> int:
     """Run browser-mode with SESSION_CONTRACT injection and receipt recording."""
-    # Inject once into the user prompt; do not re-inject if already done by caller.
     injected_prompt = inject_session_contract(prompt)
 
     # Build args with the injected prompt
