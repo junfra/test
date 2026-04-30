@@ -13,7 +13,7 @@ from oracle_plus import config
 from oracle_plus.host import detect_host_ip
 from oracle_plus.oracle_resolver import resolve_oracle_bin, resolve_oracle_command
 from oracle_plus.ports import LockBusyError, PortLock, acquire_port_lock, build_candidate_ports, probe_port
-from oracle_plus.run_state import initialize_run_state, record_run_state, _sanitize_slug
+from oracle_plus.run_state import initialize_run_state, record_run_state, _sanitize_slug, record_session_receipt
 from oracle_plus.subprocess_runner import run_subprocess
 
 
@@ -551,7 +551,7 @@ def run_browser_cli(argv: list[str]) -> int:
             session_slug=session_slug,
         )
 
-    # Fixed host:port path
+    # Fixed host:port path — route through accountability wrapper
     if effective_remote_host and ":" not in effective_remote_host:
         raise RuntimeError("fixed-port execution requires host:port")
 
@@ -561,6 +561,42 @@ def run_browser_cli(argv: list[str]) -> int:
         remote_token=remote_token if not _has_flag(argv, "--remote-token") and not _has_prefixed_flag(argv, "--remote-token") else None,
         codex_project_url=codex_url,
     )
+
+    # Extract prompt for accountability injection
+    prompt = _extract_flag_value("-p", forwarded_args) or _extract_flag_value("--prompt", forwarded_args)
+    if not prompt:
+        # Look for --prompt-file and read its content
+        prompt_file = None
+        idx = 0
+        items = list(forwarded_args)
+        while idx < len(items):
+            arg = items[idx]
+            if arg == "--prompt-file":
+                prompt_file = items[idx + 1]
+                break
+            if arg.startswith("--prompt-file="):
+                prompt_file = arg.split("=", 1)[1]
+                break
+            idx += 1
+        if prompt_file:
+            try:
+                prompt = Path(prompt_file).read_text(encoding="utf-8")
+            except OSError:
+                pass
+
+    # Inject session contract into prompt and execute via accountability wrapper
+    if prompt:
+        injected_prompt = inject_session_contract(prompt)
+        return run_browser_mode_session(
+            prompt=injected_prompt,
+            url=effective_remote_host or "",
+            port=None,
+            passthrough=tuple(forwarded_args),
+            oracle_bin=command,
+            session_slug=session_slug,
+        )
+
+    # Fallback: execute directly if no prompt extracted (should not happen in normal flow)
     return _run_command(
         command,
         forwarded_args,
