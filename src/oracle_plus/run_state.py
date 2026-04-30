@@ -101,3 +101,29 @@ def record_run_state(
 ) -> None:
     update_run_meta(slug, lambda current: {**current, key: value}, base_dir=base_dir)
 
+
+
+RECEIPT_META_FIELDS = (
+    "receipt_status",
+    "receipt_outcome",
+    "receipt_summary",
+    "receipt_next_action",
+    "strict_failure_opt_in",
+)
+
+
+def record_session_receipt(
+    slug: str,
+    receipt: object,
+    *,
+    base_dir: Path | None = None,
+) -> dict[str, str]:
+    fields = {}
+    for field in RECEIPT_META_FIELDS:
+        value = getattr(receipt, field, "")
+        fields[field] = str(value) if not isinstance(value, str) else value
+    return update_run_meta(
+        slug,
+        lambda current: {**current, **fields},
+        base_dir=base_dir,
+    )
